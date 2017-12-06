@@ -47,6 +47,7 @@ subroutine run(N_st,energy)
       enddo
       call diagonalize_ci_dressed(lambda)
       E_new = mrcc_e0_denominator(1) !sum(ci_energy_dressed(1:N_states))
+
 !  if (.true.) then
 !    provide delta_ij_mrcc_pouet
 !  endif

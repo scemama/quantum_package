@@ -1,5 +1,10 @@
 program read_integrals
-
+  BEGIN_DOC
+! Reads the integrals from the following files:
+! - kinetic_mo
+! - nuclear_mo
+! - bielec_mo
+  END_DOC
   PROVIDE ezfio_filename
   call ezfio_set_integrals_monoelec_disk_access_mo_one_integrals("None")
   call run
@@ -23,7 +28,7 @@ subroutine run
    
   call ezfio_get_mo_basis_mo_tot_num(mo_tot_num)
 
-  allocate (A(mo_tot_num_align,mo_tot_num))
+  allocate (A(mo_tot_num,mo_tot_num))
   A = 0.d0
   
   iunit = getunitandopen('kinetic_mo','r')

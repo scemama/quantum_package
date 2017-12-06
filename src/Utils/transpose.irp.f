@@ -8,7 +8,7 @@ recursive subroutine transpose(A,LDA,B,LDB,d1,d2)
  real, intent(in) :: A(LDA,d2)
  real, intent(out) :: B(LDB,d1)
 
- integer :: i,j,k, mod_align
+ integer :: i,j,k
  if ( d2 < 32 ) then
    do j=1,d1
      !DIR$ LOOP COUNT (16)
@@ -47,7 +47,15 @@ recursive subroutine dtranspose(A,LDA,B,LDB,d1,d2)
  double precision, intent(in) :: A(LDA,d2)
  double precision, intent(out) :: B(LDB,d1)
 
- integer :: i,j,k, mod_align
+
+! do j=1,d1
+!   do i=1,d2
+!    B(i,j  ) = A(j  ,i)
+!   enddo
+! enddo
+! return
+
+ integer :: i,j,k
  if ( d2 < 32 ) then
    do j=1,d1
      !DIR$ LOOP COUNT (16)

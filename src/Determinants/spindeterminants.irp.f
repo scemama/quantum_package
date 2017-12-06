@@ -365,8 +365,9 @@ end
  do k=1,N_det
    i = psi_bilinear_matrix_rows(k)
    j = psi_bilinear_matrix_columns(k)
+   f = 0.d0
    do l=1,N_states
-    f = psi_bilinear_matrix_values(k,l)*psi_bilinear_matrix_values(k,l)
+    f += psi_bilinear_matrix_values(k,l)*psi_bilinear_matrix_values(k,l)
    enddo
    det_alpha_norm(i) += f
    det_beta_norm(j)  += f
@@ -690,7 +691,7 @@ subroutine generate_all_alpha_beta_det_products
   integer, external              :: get_index_in_psi_det_sorted_bit
   integer(bit_kind), allocatable :: tmp_det(:,:,:)
   logical, external              :: is_in_wavefunction
-  integer, external              :: omp_get_thread_num
+  PROVIDE H_apply_buffer_allocated
 
   !$OMP PARALLEL DEFAULT(NONE) SHARED(psi_coef_sorted_bit,N_det_beta_unique,&
       !$OMP N_det_alpha_unique, N_int, psi_det_alpha_unique, psi_det_beta_unique,&
@@ -712,7 +713,7 @@ subroutine generate_all_alpha_beta_det_products
     enddo
     call fill_H_apply_buffer_no_selection(l-1, tmp_det, N_int, iproc)
   enddo
-  !$OMP END DO NOWAIT
+  !$OMP END DO 
   deallocate(tmp_det)
   !$OMP END PARALLEL
   call copy_H_apply_buffer_to_wf
@@ -942,7 +943,6 @@ subroutine get_all_spin_singles_and_doubles_1(buffer, idx, spindet, size_buffer,
 
   n_singles = 1
   n_doubles = 1
-  !DIR$ VECTOR ALIGNED
   do i=1,size_buffer
     degree =  popcnt(  xor( spindet, buffer(i) ) )
     if ( degree == 4 ) then
@@ -1010,7 +1010,6 @@ subroutine get_all_spin_doubles_1(buffer, idx, spindet, size_buffer, doubles, n_
   integer                        :: degree
 
   n_doubles = 1
-  !DIR$ VECTOR ALIGNED
   do i=1,size_buffer
     degree = popcnt(xor( spindet, buffer(i) ))
     if ( degree == 4 ) then
@@ -1049,12 +1048,8 @@ subroutine get_all_spin_singles_and_doubles_$N_int(buffer, idx, spindet, size_bu
   integer(bit_kind)              :: xorvec($N_int)
   integer                        :: degree
 
-  integer, external              :: align_double
-
-  !DIR$ ATTRIBUTES ALIGN : $IRP_ALIGN :: xorvec, degree
   n_singles = 1
   n_doubles = 1
-  !DIR$ VECTOR ALIGNED
   do i=1,size_buffer
 
     do k=1,$N_int
@@ -1068,7 +1063,6 @@ subroutine get_all_spin_singles_and_doubles_$N_int(buffer, idx, spindet, size_bu
     endif
   
     do k=2,$N_int
-      !DIR$ VECTOR ALIGNED
       if ( (degree <= 4).and.(xorvec(k) /= 0_8) ) then
         degree = degree + popcnt(xorvec(k))
       endif
@@ -1109,12 +1103,7 @@ subroutine get_all_spin_singles_$N_int(buffer, idx, spindet, size_buffer, single
   integer(bit_kind)              :: xorvec($N_int)
   integer                        :: degree
 
-  integer, external              :: align_double
-
-  !DIR$ ATTRIBUTES ALIGN : $IRP_ALIGN :: xorvec
-
   n_singles = 1
-  !DIR$ VECTOR ALIGNED
   do i=1,size_buffer
 
     do k=1,$N_int
@@ -1164,7 +1153,6 @@ subroutine get_all_spin_doubles_$N_int(buffer, idx, spindet, size_buffer, double
   integer(bit_kind)              :: xorvec($N_int)
 
   n_doubles = 1
-  !DIR$ VECTOR ALIGNED
   do i=1,size_buffer
 
     do k=1,$N_int
@@ -1178,7 +1166,6 @@ subroutine get_all_spin_doubles_$N_int(buffer, idx, spindet, size_buffer, double
     endif
   
     do k=2,$N_int
-      !DIR$ VECTOR ALIGNED
       if ( (degree <= 4).and.(xorvec(k) /= 0_8) ) then
         degree = degree + popcnt(xorvec(k))
       endif

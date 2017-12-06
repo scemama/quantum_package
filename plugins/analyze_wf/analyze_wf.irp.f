@@ -3,6 +3,7 @@ program analyze_wf
   BEGIN_DOC
 ! Wave function analyzis
   END_DOC
+  PROVIDE mo_tot_num psi_det psi_coef
   read_wf = .True.
   SOFT_TOUCH read_wf
   call run()
@@ -14,15 +15,26 @@ subroutine run
   integer                        :: class(0:mo_tot_num,5)
   double precision               :: occupation(mo_tot_num)
 
+  write(*,'(A)')  'Energy of 1st determinant'
+  write(*,'(A)')  '========================='
+  write(*,'(A)')  ''
+  write(*,*) 'Total', ref_bitmask_energy + nuclear_repulsion
+  write(*,*) 'Mono-electronic', mono_elec_ref_bitmask_energy
+  write(*,*) 'Kinetic', kinetic_ref_bitmask_energy
+  write(*,*) 'Electron-nucleus', nucl_elec_ref_bitmask_energy
+  write(*,*) 'Two-electron', bi_elec_ref_bitmask_energy
+  write(*,'(A)')  ''
+  write(*,'(A)')  ''
+
   write(*,'(A)')  'MO Occupation'
   write(*,'(A)')  '============='
   write(*,'(A)')  ''
   do istate=1,N_states
-    call get_occupation_from_dets(occupation,istate)
     write(*,'(A)')  ''
     write(*,'(A,I3)'),  'State ', istate
     write(*,'(A)')  '---------------'
     write(*,'(A)')  ''
+    call get_occupation_from_dets(istate,occupation)
     write (*,'(A)')  '======== ================'
     class = 0
     do i=1,mo_tot_num
