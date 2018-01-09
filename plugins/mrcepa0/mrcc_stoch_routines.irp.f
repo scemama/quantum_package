@@ -75,7 +75,6 @@ subroutine ZMQ_mrcc(E, mrcc, delta, delta_s2, relative_error)
 !  end do
 
   integer(ZMQ_PTR), external     :: new_zmq_to_qp_run_socket
-  integer, external              :: add_task_to_taskserver, zmq_set_running
   integer                        :: ipos
   ipos=1
   do i=1,N_mrcc_jobs
