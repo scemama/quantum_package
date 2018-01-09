@@ -910,8 +910,8 @@ end
   integer                        :: i,j,k
   
   double precision, allocatable  :: mrcc(:)
-  double precision               :: E_CI_before, relative_error
-  double precision, save :: errr = 0d0
+  double precision               :: E_CI_before!, relative_error
+  double precision, save :: target_error = 0d0
 
   allocate(mrcc(N_states))
 
@@ -925,14 +925,12 @@ end
   E_CI_before = mrcc_E0_denominator(1) + nuclear_repulsion
   threshold_selectors = 1.d0
   threshold_generators = 1d0 
-  if(errr /= 0d0) then
-    errr = errr / 2d0 ! (-mrcc_E0_denominator(1) + mrcc_previous_E(1)) / 1d1
+  if(target_error /= 0d0) then
+    target_error = target_error / 2d0 ! (-mrcc_E0_denominator(1) + mrcc_previous_E(1)) / 1d1
   else
-    errr = 1d-4
+    target_error = 1d-4
   end if
-  relative_error = errr
-  print *, "RELATIVE ERROR", relative_error
-  call ZMQ_mrcc(E_CI_before, mrcc, delta_ij_mrcc_zmq, delta_ij_s2_mrcc_zmq, abs(relative_error))
+  call ZMQ_mrcc(E_CI_before, mrcc, delta_ij_mrcc_zmq, delta_ij_s2_mrcc_zmq, abs(target_error))
 
   mrcc_previous_E(:) = mrcc_E0_denominator(:)
   do i=N_det_non_ref,1,-1

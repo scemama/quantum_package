@@ -15,17 +15,21 @@ subroutine run
   integer                        :: degree
   integer                        :: n_det_before, to_select
   double precision               :: threshold_davidson_in
-
   double precision               :: E_CI_before, relative_error
+  double precision, allocatable  :: delta(:,:), delta_s2(:,:)
+  
 
   allocate (mrcc(N_states))
+  allocate(delta(N_states, N_det_non_ref), delta_s2(N_states, N_det_non_ref))
   mrcc = 0.d0
+  delta = 0d0
+  delta_s2 = 0d0
   !call random_seed()
   E_CI_before = mrcc_E0_denominator(1) + nuclear_repulsion
   threshold_selectors = 1.d0
   threshold_generators = 1d0 
   relative_error = 5.d-2
-  call ZMQ_mrcc(E_CI_before, mrcc, relative_error)
+  call ZMQ_mrcc(E_CI_before, mrcc, delta, delta_s2, relative_error)
   !print *,  'Final step'
   !print *,  'N_det    = ', N_det
   print *,  'mrcc      = ', mrcc

@@ -158,14 +158,15 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
   integer, allocatable :: task_id(:)
   integer :: Nindex
   integer, allocatable :: ind(:)
-  double precision, save :: time0 = -1.d0
-  double precision :: time, timeLast, old_tooth
+  !double precision, save :: time0 = -1.d0
+  double precision :: time, time0, timeInit, old_tooth
   double precision, external :: omp_get_wtime
   integer :: cur_cp, old_cur_cp
   integer, allocatable :: parts_to_get(:)
   logical, allocatable :: actually_computed(:)
   integer :: total_computed
-  
+ 
+  print *, "TARGET ERROR :", relative_error
   delta = 0d0
   delta_s2 = 0d0
   allocate(delta_det(N_states, N_det_non_ref, 0:comb_teeth+1, 2))
@@ -195,10 +196,9 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
   !zmq_socket_pull = new_zmq_pull_socket()
   allocate(task_id(N_det_generators), ind(1))
   more = 1
-  if (time0 < 0.d0) then
-      call wall_time(time0)
-  endif
-  timeLast = time0
+  time = omp_get_wtime()
+  time0 = time
+  timeInit = time
   cur_cp = 0
   old_cur_cp = 0
   pullLoop : do while (more == 1)
@@ -256,19 +256,25 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
     
     
 
-    if(time - timeLast > 1d0 .or. more /= 1) then
-      timeLast = time
+    if(time - time0 > 10d0 .or. more /= 1) then
+      time0 = time
       cur_cp = N_cp
-      if(.not. actually_computed(mrcc_jobs(1))) cycle pullLoop
+      !if(.not. actually_computed(mrcc_jobs(1))) cycle pullLoop
 
-      do i=2,N_det_generators
+      do i=1,N_det_generators
         if(.not. actually_computed(mrcc_jobs(i))) then
-          cur_cp = done_cp_at(i-1)
+          if(i==1) then
+            cur_cp = 0
+          else
+            cur_cp = done_cp_at(i-1)
+          end if
           exit
         end if
       end do
-      if(cur_cp == 0) cycle pullLoop
-      
+      if(cur_cp == 0) then
+        print *, "no checkpoint reached so far..."
+        cycle pullLoop
+      end if
       !!!!!!!!!!!!
       double precision :: su, su2, eqt, avg, E0, val
       integer, external :: zmq_abort
@@ -278,12 +284,9 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
       
       if(N_states > 1) stop "mrcc_stoch : N_states == 1"
       do i=1, int(cps_N(cur_cp))
-        !if(.not. actually_computed(i)) stop "not computed"
-        !call get_comb_val(comb(i), mrcc_detail, cp_first_tooth(cur_cp), val)
         call get_comb_val(comb(i), mrcc_detail, cur_cp, val)
-        !val = mrcc_detail(1, i) * mrcc_weight_inv(i) * comb_step
-        su += val ! cps(i, cur_cp) * val
-        su2 += val**2 ! cps(i, cur_cp) * val**2
+        su += val
+        su2 += val**2 
       end do
       avg = su / cps_N(cur_cp)
       eqt = dsqrt( ((su2 / cps_N(cur_cp)) - avg**2) / cps_N(cur_cp) )
@@ -291,24 +294,15 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
       if(cp_first_tooth(cur_cp) <= comb_teeth) then
         E0 = E0 + mrcc_detail(1, first_det_of_teeth(cp_first_tooth(cur_cp))) * (1d0-fractage(cp_first_tooth(cur_cp)))
       end if
-      call wall_time(time)
-      if ((dabs(eqt) < relative_error .and. cps_N(cur_cp) >= 30)  .or. total_computed == N_det_generators) then
-        ! Termination
-        !print '(G10.3, 2X, F16.7, 2X, G16.3, 2X, F16.4, A20)', Nabove(tooth), avg+E, eqt, time-time0, ''
 
-!        print *, "GREPME", cur_cp, E+E0+avg, eqt, time-time0, total_computed
+      print "(I5,F15.7,F10.2,E12.4)", cur_cp, E+E0+avg, eqt, time-timeInit
+
+      if ((dabs(eqt) < relative_error .and. cps_N(cur_cp) >= 30)  .or. total_computed == N_det_generators) then
         if (zmq_abort(zmq_to_qp_run_socket) == -1) then
           call sleep(1)
           if (zmq_abort(zmq_to_qp_run_socket) == -1) then
             print *, irp_here, ': Error in sending abort signal (2)'
           endif
-        endif
-      else
-        if (cur_cp > old_cur_cp) then
-          old_cur_cp = cur_cp
-!          print *, "GREPME", cur_cp, E+E0+avg, eqt, time-time0, total_computed
-
-          !print '(G10.3, 2X, F16.7, 2X, G16.3, 2X, F16.4, A20)', Nabove(tooth), avg+E, eqt, time-time0, ''
         endif
       endif
     end if
@@ -369,7 +363,7 @@ end function
 &BEGIN_PROVIDER [ integer, N_cps_max ]
   implicit none
   comb_teeth = 16
-  N_cps_max = 32
+  N_cps_max = 64
   !comb_per_cp = 64
   gen_per_cp = (N_det_generators / N_cps_max) + 1
   N_cps_max += 1
