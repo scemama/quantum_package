@@ -59,7 +59,6 @@ subroutine mrsc2_dressing_slave(thread,iproc)
   integer, external :: connect_to_taskserver, disconnect_from_taskserver
   !double precision, external :: get_dij
      
-  integer, external :: add_task_to_taskserver
 
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
   if (connect_to_taskserver(zmq_to_qp_run_socket,worker_id,thread) == -1) then
@@ -208,7 +207,7 @@ subroutine mrsc2_dressing_slave(thread,iproc)
 
   deallocate(delta)
 
-  if (disconnect_from_taskserver(zmq_to_qp_run_socket,zmq_socket_push,worker_id) == -1) then
+  if (disconnect_from_taskserver(zmq_to_qp_run_socket,worker_id) == -1) then
     continue
   endif
   call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)

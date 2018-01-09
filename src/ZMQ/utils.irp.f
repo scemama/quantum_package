@@ -691,19 +691,17 @@ integer function connect_to_taskserver(zmq_to_qp_run_socket,worker_id,thread)
   connect_to_taskserver = -1
 end
 
-integer function disconnect_from_taskserver(zmq_to_qp_run_socket, &
-   zmq_socket_push, worker_id)
+integer function disconnect_from_taskserver(zmq_to_qp_run_socket, worker_id)
   use f77_zmq
   implicit none
   BEGIN_DOC
   ! Disconnect from the task server
   END_DOC
   integer(ZMQ_PTR), intent(in)   :: zmq_to_qp_run_socket
-  integer(ZMQ_PTR), intent(in)   :: zmq_socket_push
   integer, intent(in)            :: worker_id
   
   integer                        :: rc, sze
-  character*(64)                 :: message, reply, state
+  character*(512)                :: message, reply, state
 
   disconnect_from_taskserver = 0
 

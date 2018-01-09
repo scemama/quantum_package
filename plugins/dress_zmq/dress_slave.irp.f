@@ -1,4 +1,4 @@
-program dress_slave
+subroutine dress_slave
   implicit none
   BEGIN_DOC
 ! Helper program to compute the dress in distributed mode.

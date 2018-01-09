@@ -55,33 +55,40 @@ subroutine run_dress_slave(thread,iproc,energy)
   dress_detail = 0d0
   do
     call get_task_from_taskserver(zmq_to_qp_run_socket,worker_id, task_id, task)
-
+    
     if(task_id /= 0) then
       read (task,*) subset, i_generator
       contrib = 0d0
       delta_ij_loc = 0d0
       delta_ii_loc = 0d0
-      do h=1, hh_shortcut(0)
-        call apply_hole_local(psi_det_generators(1,1,i_generator), hh_exists(1, h), mask, ok, N_int)
-        if(.not. ok) cycle
-        omask = 0_bit_kind
-        if(hh_exists(1, h) /= 0) omask = mask
-        n = 1
-        do p=hh_shortcut(h), hh_shortcut(h+1)-1
-          call apply_particle_local(mask, pp_exists(1, p), abuf(1,1,n), ok, N_int)
-          if(ok) n = n + 1
-          if(n > N_det_non_ref) stop "Buffer too small in dress..."
-        end do
-        n = n - 1
-
-        if(n /= 0) then
-          n = n + 1
+      if(do_dress_with_alpha_buffer .or. do_dress_with_alpha) then
+        do h=1, hh_shortcut(0)
+          call apply_hole_local(psi_det_generators(1,1,i_generator), hh_exists(1, h), mask, ok, N_int)
+          if(.not. ok) cycle
+          omask = 0_bit_kind
+          if(hh_exists(1, h) /= 0) omask = mask
+          n = 1
+          do p=hh_shortcut(h), hh_shortcut(h+1)-1
+            call apply_particle_local(mask, pp_exists(1, p), abuf(1,1,n), ok, N_int)
+            if(ok) n = n + 1
+            if(n > N_det_non_ref) stop "Buffer too small in dress..."
+          end do
           n = n - 1
-          !! DRESS HERE !!
-          !call dress_part_dress_1c(delta_ij_loc(1,1,1), delta_ii_loc(1,1), delta_ij_loc(1,1,2), delta_ii_loc(1,2), &
-          !      i_generator,n,abuf,N_int,omask,contrib)
-        endif
-      end do
+
+          if(n /= 0) then
+            if(do_dress_with_alpha_buffer) then
+              call dress_with_alpha_buffer(delta_ij_loc(1,1,1), delta_ii_loc(1,1), delta_ij_loc(1,1,2), delta_ii_loc(1,2), &
+                    i_generator,n,abuf,N_int,omask,contrib)
+            else
+              stop 'dress_with_alpha not implemented yet'
+            end if
+          endif
+        end do
+      else if(do_dress_with_generator) then
+        stop 'dress_with_generator not implemented yet'
+      else
+        stop 'no dressing level defined'
+      end if
       dress_detail(:) = contrib
       call task_done_to_taskserver(zmq_to_qp_run_socket,worker_id,task_id)
       call push_dress_results(zmq_socket_push, i_generator, dress_detail, delta_ij_loc(1,1,1), task_id)

@@ -4,6 +4,14 @@ BEGIN_PROVIDER [ integer, fragment_first ]
 END_PROVIDER
 
 
+BEGIN_PROVIDER [ integer, mrcc_stoch_istate ]
+ implicit none
+ BEGIN_DOC
+ ! State considered
+ END_DOC
+ mrcc_stoch_istate = 1
+END_PROVIDER
+
 subroutine ZMQ_mrcc(E, mrcc, delta, delta_s2, relative_error)
   !use dress_types
   use f77_zmq
@@ -14,7 +22,7 @@ subroutine ZMQ_mrcc(E, mrcc, delta, delta_s2, relative_error)
 
   integer(ZMQ_PTR)               :: zmq_to_qp_run_socket, zmq_socket_pull
   integer, external              :: omp_get_thread_num
-  double precision, intent(in)   :: relative_error, E
+  double precision, intent(in)   :: relative_error, E(N_states)
   double precision, intent(out)  :: mrcc(N_states)
   double precision, intent(out)  :: delta(N_states, N_det_non_ref)
   double precision, intent(out)  :: delta_s2(N_states, N_det_non_ref)
@@ -151,7 +159,6 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
   integer(ZMQ_PTR)               :: zmq_to_qp_run_socket
 
   integer(ZMQ_PTR), external     :: new_zmq_pull_socket
-  !integer(ZMQ_PTR)               :: zmq_socket_pull
 
   integer :: more
   integer :: i, j, k, i_state, N, ntask
@@ -193,7 +200,6 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
   actually_computed = .false.
 
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
-  !zmq_socket_pull = new_zmq_pull_socket()
   allocate(task_id(N_det_generators), ind(1))
   more = 1
   time = omp_get_wtime()
@@ -327,7 +333,6 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
   end if
   mrcc(1) = E
   call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
-  !call end_zmq_pull_socket(zmq_socket_pull)
 end subroutine
 
 
