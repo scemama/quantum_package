@@ -79,7 +79,6 @@ END_PROVIDER
 
   allocate(dress(N_states), del(N_states, N_det_non_ref), del_s2(N_states, N_det_non_ref))
 
-
   delta_ij = 0d0
   delta_ii = 0d0
   delta_ij_s2 = 0d0

@@ -43,7 +43,7 @@ BEGIN_PROVIDER [ integer, N_det ]
     else
       N_det = 1
     endif
-    call write_int(output_determinants,N_det,'Number of determinants')
+    call write_int(6,N_det,'Number of determinants')
   endif
   IRP_IF MPI
     include 'mpif.h'
@@ -77,7 +77,7 @@ BEGIN_PROVIDER [ integer, psi_det_size ]
   BEGIN_DOC
   ! Size of the psi_det/psi_coef arrays
   END_DOC
-  PROVIDE ezfio_filename output_determinants
+  PROVIDE ezfio_filename 
   logical                        :: exists
   if (mpi_master) then
     call ezfio_has_determinants_n_det(exists)
@@ -87,7 +87,7 @@ BEGIN_PROVIDER [ integer, psi_det_size ]
       psi_det_size = 1
     endif
     psi_det_size = max(psi_det_size,100000)
-    call write_int(output_determinants,psi_det_size,'Dimension of the psi arrays')
+    call write_int(6,psi_det_size,'Dimension of the psi arrays')
   endif
   IRP_IF MPI
     include 'mpif.h'
@@ -178,13 +178,13 @@ BEGIN_PROVIDER [ double precision, psi_coef, (psi_det_size,N_states) ]
   integer                        :: i,k, N_int2
   logical                        :: exists
   character*(64)                 :: label
-  
+
   PROVIDE read_wf N_det mo_label ezfio_filename
   psi_coef = 0.d0
   do i=1,min(N_states,psi_det_size)
     psi_coef(i,i) = 1.d0
   enddo
-  
+
   if (mpi_master) then
     if (read_wf) then
       call ezfio_has_determinants_psi_coef(exists)
@@ -195,17 +195,27 @@ BEGIN_PROVIDER [ double precision, psi_coef, (psi_det_size,N_states) ]
           exists = (label == mo_label)
         endif
       endif
+
       if (exists) then
-        call ezfio_get_determinants_psi_coef(psi_coef)
+        
+        double precision, allocatable  :: psi_coef_read(:,:)
+        allocate (psi_coef_read(N_det,N_states))
+        print *,  'Read psi_coef', N_det, N_states
+        call ezfio_get_determinants_psi_coef(psi_coef_read)
+        do k=1,N_states
+          do i=1,N_det
+            psi_coef(i,k) = psi_coef_read(i,k)
+          enddo
+        enddo
+        deallocate(psi_coef_read)
+        
       endif
-      
     endif
-    print *,  'Read psi_coef'
   endif
   IRP_IF MPI
     include 'mpif.h'
     integer                        :: ierr
-    call     MPI_BCAST( psi_coef, N_states*psi_det_size, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+    call     MPI_BCAST( psi_coef, size(psi_coef), MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
     if (ierr /= MPI_SUCCESS) then
       stop 'Unable to read psi_coef with MPI'
     endif
@@ -517,6 +527,7 @@ subroutine save_wavefunction_general(ndet,nstates,psidet,dim_psicoef,psicoef)
     call ezfio_set_determinants_mo_label(mo_label)
     
     allocate (psi_det_save(N_int,2,ndet))
+    !$OMP PARALLEL DO DEFAULT(NONE) PRIVATE(i,j,k) SHARED(psi_det_save,psidet,ndet,N_int)
     do i=1,ndet
       do j=1,2
         do k=1,N_int
@@ -524,6 +535,7 @@ subroutine save_wavefunction_general(ndet,nstates,psidet,dim_psicoef,psicoef)
         enddo
       enddo
     enddo
+    !$OMP END PARALLEL DO
     call ezfio_set_determinants_psi_det(psi_det_save)
     deallocate (psi_det_save)
     
@@ -550,7 +562,7 @@ subroutine save_wavefunction_general(ndet,nstates,psidet,dim_psicoef,psicoef)
     
     call ezfio_set_determinants_psi_coef(psi_coef_save)
     deallocate (psi_coef_save)
-    call write_int(output_determinants,ndet,'Saved determinants')
+    call write_int(6,ndet,'Saved determinants')
   endif
 end
 
@@ -622,7 +634,7 @@ subroutine save_wavefunction_specified(ndet,nstates,psidet,psicoef,ndetsave,inde
   enddo
   
   call ezfio_set_determinants_psi_coef(psi_coef_save)
-  call write_int(output_determinants,ndet,'Saved determinants')
+  call write_int(6,ndet,'Saved determinants')
   deallocate (psi_coef_save)
 end
 

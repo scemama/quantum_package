@@ -1,4 +1,4 @@
-program dress_zmq
+subroutine dress_zmq()
   implicit none
   double precision, allocatable  :: energy(:)
   allocate (energy(N_states))
