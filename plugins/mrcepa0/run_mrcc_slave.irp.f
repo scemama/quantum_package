@@ -41,7 +41,6 @@ subroutine run_mrcc_slave(thread,iproc,energy)
   integer :: h,p,n
   logical :: ok
   double precision :: contrib(N_states)
-
   allocate(delta_ij_loc(N_states,N_det_non_ref,2) &
   ,delta_ii_loc(N_states,2))! &
   !,delta_ij_s2_loc(N_states,N_det_non_ref,N_det_ref) &
@@ -73,7 +72,7 @@ subroutine run_mrcc_slave(thread,iproc,energy)
     else
       integer :: i_generator, i_i_generator, subset
       read (task,*) subset, ind
-      
+      print *, "SLAVE RECEIVED", ind
 !      if(buf%N == 0) then
 !        ! Only first time 
 !        call create_selection_buffer(1, 2, buf)

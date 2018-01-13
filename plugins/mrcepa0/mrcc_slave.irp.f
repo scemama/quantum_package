@@ -38,19 +38,16 @@ subroutine run_wf
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
 
   do
-
     call wait_for_states(states,zmq_state,1)
-
-    if(trim(zmq_state) == 'Stopped') then
+    if(zmq_state(1:7) == 'Stopped') then
 
       exit
 
-    else if (trim(zmq_state) == 'mrcc') then
+    else if (zmq_state(1:4) == 'mrcc') then
 
       ! Selection
       ! ---------
 
-      print *,  'mrcc'
       !call wall_time(t0)
       if (zmq_get_psi(zmq_to_qp_run_socket,1) == -1) cycle
       if (zmq_get_N_det_generators (zmq_to_qp_run_socket, 1) == -1) cycle

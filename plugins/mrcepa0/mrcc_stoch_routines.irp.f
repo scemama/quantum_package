@@ -209,7 +209,6 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
   old_cur_cp = 0
   pullLoop : do while (more == 1)
     call pull_mrcc_results(zmq_socket_pull, Nindex, ind, mrcc_mwen, delta_loc, task_id, ntask)
-
     if(Nindex /= 1) stop "tried pull multiple Nindex"
 
     do i=1,Nindex
