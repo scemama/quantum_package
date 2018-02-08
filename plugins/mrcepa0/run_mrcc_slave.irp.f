@@ -35,17 +35,13 @@ subroutine run_mrcc_slave(thread,iproc,energy)
   integer(bit_kind) :: mask(N_int,2), omask(N_int,2)
  
   double precision,allocatable :: delta_ij_loc(:,:,:) 
-  double precision,allocatable :: delta_ii_loc(:,:) 
   !double precision,allocatable :: delta_ij_s2_loc(:,:,:)
-  !double precision,allocatable :: delta_ii_s2_loc(:,:)
   integer :: h,p,n
   logical :: ok
   double precision :: contrib(N_states)
 
-  allocate(delta_ij_loc(N_states,N_det_non_ref,2) &
-  ,delta_ii_loc(N_states,2))! &
+  allocate(delta_ij_loc(N_states,N_det_non_ref,2) )
   !,delta_ij_s2_loc(N_states,N_det_non_ref,N_det_ref) &
-  !,delta_ii_s2_loc(N_states, N_det_ref))
 
 
         allocate(abuf(N_int, 2, N_det_non_ref))
@@ -82,9 +78,7 @@ subroutine run_mrcc_slave(thread,iproc,energy)
         contrib = 0d0
         i_generator = ind(i_i_generator)
         delta_ij_loc = 0d0
-        delta_ii_loc = 0d0
         !delta_ij_s2_loc = 0d0
-        !delta_ii_s2_loc = 0d0
         !call select_connected(i_generator,energy,mrcc_detail(1, i_i_generator),buf,subset)
 
 !!!!!!!!!!!!!!!!!!!!!!
@@ -103,7 +97,7 @@ subroutine run_mrcc_slave(thread,iproc,energy)
           n = n - 1
 
           if(n /= 0) then
-            call mrcc_part_dress_1c(delta_ij_loc(1,1,1), delta_ii_loc(1,1), delta_ij_loc(1,1,2), delta_ii_loc(1,2), &
+            call mrcc_part_dress_1c(delta_ij_loc(1,1,1), delta_ij_loc(1,1,2), &
                   i_generator,n,abuf,N_int,omask,contrib)
           endif
         end do

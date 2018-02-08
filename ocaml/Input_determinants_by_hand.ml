@@ -93,8 +93,16 @@ end = struct
   ;;
 
   let write_n_states n =
-    States_number.to_int n
-    |> Ezfio.set_determinants_n_states
+    let n_states = 
+      States_number.to_int n
+    in
+    Ezfio.set_determinants_n_states n_states;
+    let data =
+      Array.create n_states 1.
+      |> Array.to_list
+    in
+    Ezfio.ezfio_array_of_list ~rank:1 ~dim:[| n_states |] ~data
+    |> Ezfio.set_determinants_state_average_weight
   ;;
 
   let write_state_average_weight data =
