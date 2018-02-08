@@ -1,10 +1,6 @@
 #!/bin/bash -x
 
-if [[ ! -d lapack-release ]]
-then
-  git clone https://github.com/Reference-LAPACK/lapack-release.git
-fi
-
+git clone https://github.com/Reference-LAPACK/lapack-release.git || echo "Clone failed"
 cd lapack-release
 cp make.inc.example make.inc
 make -j 8 
