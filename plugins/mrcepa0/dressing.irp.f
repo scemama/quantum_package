@@ -74,10 +74,8 @@ BEGIN_PROVIDER [ double precision, mrcc_norm_acc, (0:N_det_non_ref, N_states) ]
 END_PROVIDER
  
 
- BEGIN_PROVIDER [ double precision, delta_ij_mrcc_sto,(N_states,N_det_non_ref,N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ii_mrcc_sto, (N_states, N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ij_s2_mrcc_sto, (N_states,N_det_non_ref,N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ii_s2_mrcc_sto, (N_states, N_det_ref) ]
+ BEGIN_PROVIDER [ double precision, delta_ij_mrcc_sto,(N_states,N_det_non_ref) ]
+&BEGIN_PROVIDER [ double precision, delta_ij_s2_mrcc_sto, (N_states,N_det_non_ref) ]
   use bitmasks
   implicit none
   integer :: gen, h, p, n, t, i, j, h1, h2, p1, p2, s1, s2, iproc
@@ -94,10 +92,8 @@ END_PROVIDER
   read(*,*) n_in_teeth
   !n_in_teeth = 2
   in_teeth_step = 1d0 / dfloat(n_in_teeth)
-!double precision :: delta_ij_mrcc_tmp,(N_states,N_det_non_ref,N_det_ref) ]
-  !double precision :: delta_ii_mrcc_tmp, (N_states,N_det_ref) ]
-  !double precision :: delta_ij_s2_mrcc_tmp(N_states,N_det_non_ref,N_det_ref)
-  !double precision :: delta_ii_s2_mrcc_tmp(N_states, N_det_ref)
+  !double precision :: delta_ij_mrcc_tmp,(N_states,N_det_non_ref) 
+  !double precision :: delta_ij_s2_mrcc_tmp(N_states,N_det_non_ref)
 
   coefs = 0d0
   coefs(:mrcc_teeth(1,1)-1) = 1d0
@@ -144,15 +140,13 @@ END_PROVIDER
 
 
   delta_ij_mrcc_sto = 0d0
-  delta_ii_mrcc_sto = 0d0
   delta_ij_s2_mrcc_sto = 0d0
-  delta_ii_s2_mrcc_sto = 0d0
   PROVIDE dij
   provide hh_shortcut psi_det_size! lambda_mrcc
   !$OMP PARALLEL DO default(none)  schedule(dynamic) &
   !$OMP shared(psi_ref, psi_non_ref, hh_exists, pp_exists, N_int, hh_shortcut) &
-  !$OMP shared(N_det_generators, coefs,N_det_non_ref, N_det_ref, delta_ii_mrcc_sto, delta_ij_mrcc_sto) &
-  !$OMP shared(contrib,psi_det_generators, delta_ii_s2_mrcc_sto, delta_ij_s2_mrcc_sto) &
+  !$OMP shared(N_det_generators, coefs,N_det_non_ref, delta_ij_mrcc_sto) &
+  !$OMP shared(contrib,psi_det_generators, delta_ij_s2_mrcc_sto) &
   !$OMP private(i,j,curnorm,myCoef, h, n, mask, omask, buf, ok, iproc) 
   do gen= 1,N_det_generators
     if(coefs(gen) == 0d0) cycle
@@ -174,8 +168,8 @@ END_PROVIDER
       end do
       n = n - 1
       if(n /= 0) then
-        call mrcc_part_dress(delta_ij_mrcc_sto, delta_ii_mrcc_sto, delta_ij_s2_mrcc_sto, &
-            delta_ii_s2_mrcc_sto, gen,n,buf,N_int,omask,myCoef,contrib)
+        call mrcc_part_dress(delta_ij_mrcc_sto, delta_ij_s2_mrcc_sto, &
+            gen,n,buf,N_int,omask,myCoef,contrib)
       endif
     end do
     deallocate(buf)
@@ -185,21 +179,17 @@ END_PROVIDER
 
 
     curnorm = 0d0
-    do i=1,N_det_ref
     do j=1,N_det_non_ref
-      curnorm += delta_ij_mrcc_sto(1, j, i)**2
+      curnorm += delta_ij_mrcc_sto(1,j)*delta_ij_mrcc_sto(1,j)
     end do
-    end do
-    print *, "NORM DELTA ", curnorm**0.5d0
+    print *, "NORM DELTA ", dsqrt(curnorm)
 
 END_PROVIDER
 
 
 
- BEGIN_PROVIDER [ double precision, delta_ij_cancel, (N_states,N_det_non_ref,N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ii_cancel, (N_states, N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ij_s2_cancel, (N_states,N_det_non_ref,N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ii_s2_cancel, (N_states, N_det_ref) ]
+ BEGIN_PROVIDER [ double precision, delta_ij_cancel, (N_states,N_det_non_ref) ]
+&BEGIN_PROVIDER [ double precision, delta_ij_s2_cancel, (N_states,N_det_non_ref) ]
   use bitmasks
   implicit none
 
@@ -216,15 +206,19 @@ END_PROVIDER
   integer(bit_kind)               :: det_tmp(N_int, 2), det_tmp2(N_int, 2),inac, virt
   integer, external               :: get_index_in_psi_det_sorted_bit, searchDet,detCmp
   logical, external               :: is_in_wavefunction
+  double precision                :: c0(N_states)
      
   provide dij
   
   delta_ij_cancel = 0d0
-  delta_ii_cancel = 0d0
+
+  do i_state = 1, N_states 
+    c0(i_state) = 1.d0/psi_coef(dressed_column_idx(i_state),i_state)
+  enddo
 
   do i=1,N_det_ref
     !$OMP PARALLEL DO default(shared) private(kk, k, blok, exc_Ik,det_tmp2,ok,deg,phase_Ik, l,ll) &
-    !$OMP private(contrib, contrib_s2, i_state)
+    !$OMP private(contrib, contrib_s2, i_state, c0)
     do kk = 1, nlink(i)
       k = det_cepa0_idx(linked(kk, i))
       blok = blokMwen(kk, i)
@@ -244,21 +238,10 @@ END_PROVIDER
         do i_state = 1, N_states 
           contrib =  (dij(j, l, i_state) - dij(i, k, i_state)) * delta_cas(i,j,i_state)! * Hla *phase_ia * phase_ik
           contrib_s2 =  dij(j, l, i_state) - dij(i, k, i_state)! * Sla*phase_ia * phase_ik
-          if(dabs(psi_ref_coef(i,i_state)).ge.1.d-3) then
-            !$OMP ATOMIC
-            delta_ij_cancel(i_state,l,i) += contrib
-            !$OMP ATOMIC
-            delta_ij_s2_cancel(i_state,l,i) += contrib_s2
-            !$OMP ATOMIC
-            delta_ii_cancel(i_state,i) -= contrib / psi_ref_coef(i, i_state) * psi_non_ref_coef(l,i_state)
-            !$OMP ATOMIC
-            delta_ii_s2_cancel(i_state,i) -= contrib_s2 / psi_ref_coef(i, i_state) * psi_non_ref_coef(l,i_state)
-          else
-           !$OMP ATOMIC
-           delta_ij_cancel(i_state,l,i) += contrib * 0.5d0
-           !$OMP ATOMIC
-           delta_ij_s2_cancel(i_state,l,i) += contrib_s2 * 0.5d0
-         endif
+          !$OMP ATOMIC
+          delta_ij_cancel(i_state,l) += contrib * psi_ref_coef(i,i_state) * c0(i_state)
+          !$OMP ATOMIC
+          delta_ij_s2_cancel(i_state,l) += contrib_s2* psi_ref_coef(i,i_state) * c0(i_state)
         end do
       end do
     end do
@@ -268,10 +251,8 @@ END_PROVIDER
 END_PROVIDER
 
 
- BEGIN_PROVIDER [ double precision, delta_ij_mrcc, (N_states,N_det_non_ref,N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ii_mrcc, (N_states, N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ij_s2_mrcc, (N_states,N_det_non_ref,N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ii_s2_mrcc, (N_states, N_det_ref) ]
+ BEGIN_PROVIDER [ double precision, delta_ij_mrcc, (N_states,N_det_non_ref) ]
+&BEGIN_PROVIDER [ double precision, delta_ij_s2_mrcc, (N_states,N_det_non_ref) ]
   use bitmasks
   implicit none
   integer :: gen, h, p, n, t, i, h1, h2, p1, p2, s1, s2, iproc
@@ -286,14 +267,12 @@ END_PROVIDER
   
   contrib = 0d0
   delta_ij_mrcc = 0d0
-  delta_ii_mrcc = 0d0
   delta_ij_s2_mrcc = 0d0
-  delta_ii_s2_mrcc = 0d0
 
 
   !$OMP PARALLEL DO default(none)  schedule(dynamic) &
   !$OMP shared(contrib,psi_det_generators, N_det_generators, hh_exists, pp_exists, N_int, hh_shortcut) &
-  !$OMP shared(N_det_non_ref, N_det_ref, delta_ii_mrcc, delta_ij_mrcc, delta_ii_s2_mrcc, delta_ij_s2_mrcc) &
+  !$OMP shared(N_det_non_ref, N_det_ref, delta_ij_mrcc, delta_ij_s2_mrcc) &
   !$OMP private(h, n, mask, omask, buf, ok, iproc) 
   do gen= 1, N_det_generators
     allocate(buf(N_int, 2, N_det_non_ref))
@@ -313,7 +292,7 @@ END_PROVIDER
       n = n - 1
 
       if(n /= 0) then
-        call mrcc_part_dress(delta_ij_mrcc, delta_ii_mrcc, delta_ij_s2_mrcc, delta_ii_s2_mrcc, gen,n,buf,N_int,omask,1d0,contrib)
+        call mrcc_part_dress(delta_ij_mrcc, delta_ij_s2_mrcc, gen,n,buf,N_int,omask,1d0,contrib)
       endif
 
     end do
@@ -324,20 +303,18 @@ END_PROVIDER
 
 
 ! subroutine blit(b1, b2)
-!   double precision :: b1(N_states,N_det_non_ref,N_det_ref), b2(N_states,N_det_non_ref,N_det_ref)
+!   double precision :: b1(N_states,N_det_non_ref), b2(N_states,N_det_non_ref)
 !   b1 = b1 + b2
 ! end subroutine
 
 
-subroutine mrcc_part_dress(delta_ij_, delta_ii_,delta_ij_s2_, delta_ii_s2_,i_generator,n_selected,det_buffer,Nint,key_mask,coef,contrib)
+subroutine mrcc_part_dress(delta_ij_, delta_ij_s2_, i_generator,n_selected,det_buffer,Nint,key_mask,coef,contrib)
  use bitmasks
  implicit none
 
   integer, intent(in)            :: i_generator,n_selected, Nint
-  double precision, intent(inout) :: delta_ij_(N_states,N_det_non_ref,N_det_ref)
-  double precision, intent(inout) :: delta_ii_(N_states,N_det_ref)
-  double precision, intent(inout) :: delta_ij_s2_(N_states,N_det_non_ref,N_det_ref)
-  double precision, intent(inout) :: delta_ii_s2_(N_states,N_det_ref)
+  double precision, intent(inout) :: delta_ij_(N_states,N_det_non_ref)
+  double precision, intent(inout) :: delta_ij_s2_(N_states,N_det_non_ref)
 
   integer(bit_kind), intent(in)  :: det_buffer(Nint,2,n_selected)
   integer                        :: i,j,k,l,m
@@ -399,6 +376,11 @@ subroutine mrcc_part_dress(delta_ij_, delta_ii_,delta_ij_s2_, delta_ii_s2_,i_gen
   
   deallocate(microlist, idx_microlist)
   
+  double precision :: c0(N_states)
+  do i_state=1,N_states
+    c0(i_state) = 1.d0/psi_coef(dressed_column_idx(i_state),i_state)
+  enddo
+
   allocate (dIa_hla(N_states,N_det_non_ref), dIa_sla(N_states,N_det_non_ref))
   
   ! |I>
@@ -436,8 +418,8 @@ subroutine mrcc_part_dress(delta_ij_, delta_ii_,delta_ij_s2_, delta_ii_s2_,i_gen
       
  
   do i_alpha=1,N_tq
-   if(key_mask(1,1) /= 0) then
-      call getMobiles(tq(1,1,i_alpha), key_mask, mobiles, Nint) 
+    if(key_mask(1,1) /= 0) then
+      call getMobiles(tq(1,1,i_alpha), key_mask, mobiles, Nint)
       
       if(N_microlist(mobiles(1)) < N_microlist(mobiles(2))) then
         smallerlist = mobiles(1)
@@ -445,7 +427,7 @@ subroutine mrcc_part_dress(delta_ij_, delta_ii_,delta_ij_s2_, delta_ii_s2_,i_gen
         smallerlist = mobiles(2)
       end if
       
-    
+      
       do l=0,N_microlist(smallerlist)-1
         microlist_zero(:,:,ptr_microlist(1) + l) = microlist(:,:,ptr_microlist(smallerlist) + l)
         idx_microlist_zero(ptr_microlist(1) + l) = idx_microlist(ptr_microlist(smallerlist) + l)
@@ -467,9 +449,9 @@ subroutine mrcc_part_dress(delta_ij_, delta_ii_,delta_ij_s2_, delta_ii_s2_,i_gen
       k_sd = idx_alpha(l_sd)
       call i_h_j(tq(1,1,i_alpha),psi_non_ref(1,1,idx_alpha(l_sd)),Nint,hij_cache(k_sd))
       call get_s2(tq(1,1,i_alpha),psi_non_ref(1,1,idx_alpha(l_sd)),Nint,sij_cache(k_sd))
-      !if(sij_cache(k_sd) /= 0D0) PRINT *, "SIJ ", sij_cache(k_sd) 
+      !if(sij_cache(k_sd) /= 0D0) PRINT *, "SIJ ", sij_cache(k_sd)
     enddo
-
+    
     ! |I>
     do i_I=1,N_det_ref
       ! Find triples and quadruple grand parents
@@ -484,12 +466,12 @@ subroutine mrcc_part_dress(delta_ij_, delta_ii_,delta_ij_s2_, delta_ii_s2_,i_gen
       
       ! <I|  <>  |alpha>
       do k_sd=1,idx_alpha(0)
-
+        
         call get_excitation_degree(psi_ref(1,1,i_I),psi_non_ref(1,1,idx_alpha(k_sd)),degree,Nint)
         if (degree > 2) then
           cycle
         endif
-
+        
         ! <I| /k\ |alpha>
         
         ! |l> = Exc(k -> alpha) |I>
@@ -499,7 +481,7 @@ subroutine mrcc_part_dress(delta_ij_, delta_ii_,delta_ij_s2_, delta_ii_s2_,i_gen
           tmp_det(k,1) = psi_ref(k,1,i_I)
           tmp_det(k,2) = psi_ref(k,2,i_I)
         enddo
-        logical :: ok
+        logical                        :: ok
         call apply_excitation(psi_ref(1,1,i_I), exc, tmp_det, ok, Nint)
         
         do i_state=1,N_states
@@ -510,7 +492,7 @@ subroutine mrcc_part_dress(delta_ij_, delta_ii_,delta_ij_s2_, delta_ii_s2_,i_gen
         do i_state=1,N_states
           dka(i_state) = 0.d0
         enddo
-
+        
         if (ok) then
           do l_sd=k_sd+1,idx_alpha(0)
             call get_excitation_degree(tmp_det,psi_non_ref(1,1,idx_alpha(l_sd)),degree,Nint)
@@ -522,40 +504,40 @@ subroutine mrcc_part_dress(delta_ij_, delta_ii_,delta_ij_s2_, delta_ii_s2_,i_gen
               exit
             endif
           enddo
-
+          
         else if (perturbative_triples) then
-           ! Linked
-
-            hka = hij_cache(idx_alpha(k_sd))
-            if (dabs(hka) > 1.d-12) then
-              call get_delta_e_dyall_general_mp(psi_ref(1,1,i_I),tq(1,1,i_alpha),Delta_E_inv)
-
-              do i_state=1,N_states
-                ASSERT (Delta_E_inv(i_state) < 0.d0)
-                dka(i_state) = hka / Delta_E_inv(i_state)
-              enddo
-            endif
-
+          ! Linked
+          
+          hka = hij_cache(idx_alpha(k_sd))
+          if (dabs(hka) > 1.d-12) then
+            call get_delta_e_dyall_general_mp(psi_ref(1,1,i_I),tq(1,1,i_alpha),Delta_E_inv)
+            
+            do i_state=1,N_states
+              ASSERT (Delta_E_inv(i_state) < 0.d0)
+              dka(i_state) = hka / Delta_E_inv(i_state)
+            enddo
+          endif
+          
         endif
-
+        
         if (perturbative_triples.and. (degree2 == 1) ) then
-            call i_h_j(psi_ref(1,1,i_I),tmp_det,Nint,hka)
-            hka = hij_cache(idx_alpha(k_sd)) - hka
-            if (dabs(hka) > 1.d-12) then
-              call get_delta_e_dyall_general_mp(psi_ref(1,1,i_I),tq(1,1,i_alpha),Delta_E_inv)
-              do i_state=1,N_states
-                ASSERT (Delta_E_inv(i_state) < 0.d0)
-                dka(i_state) = hka / Delta_E_inv(i_state)
-              enddo
-            endif
-
+          call i_h_j(psi_ref(1,1,i_I),tmp_det,Nint,hka)
+          hka = hij_cache(idx_alpha(k_sd)) - hka
+          if (dabs(hka) > 1.d-12) then
+            call get_delta_e_dyall_general_mp(psi_ref(1,1,i_I),tq(1,1,i_alpha),Delta_E_inv)
+            do i_state=1,N_states
+              ASSERT (Delta_E_inv(i_state) < 0.d0)
+              dka(i_state) = hka / Delta_E_inv(i_state)
+            enddo
+          endif
+          
         endif
-
+        
         do i_state=1,N_states
           dIa(i_state) = dIa(i_state) + dIk(i_state) * dka(i_state)
         enddo
       enddo
-     
+      
       do i_state=1,N_states
         ci_inv(i_state) = psi_ref_coef_inv(i_I,i_state)
       enddo
@@ -569,39 +551,17 @@ subroutine mrcc_part_dress(delta_ij_, delta_ii_,delta_ij_s2_, delta_ii_s2_,i_gen
         enddo
       enddo
       do i_state=1,N_states
-        if(dabs(psi_ref_coef(1,i_state)).ge.1.d-3)then
-          do l_sd=1,idx_alpha(0)
-            k_sd = idx_alpha(l_sd)
-            p1 = 1
-            hdress = dIa_hla(i_state,k_sd) * psi_ref_coef(i_I,i_state) / psi_ref_coef(p1,i_state)
-            sdress = dIa_sla(i_state,k_sd) * psi_ref_coef(i_I,i_state) / psi_ref_coef(p1,i_state)
-            !$OMP ATOMIC
-            contrib(i_state) += hdress * psi_ref_coef(p1, i_state) * psi_non_ref_coef(k_sd, i_state)
-            !$OMP ATOMIC
-            delta_ij_(i_state,k_sd,p1) += hdress
-            !$OMP ATOMIC
-            !delta_ii_(i_state,i_I) = delta_ii_(i_state,i_I) - dIa_hla(i_state,k_sd) * ci_inv(i_state) * psi_non_ref_coef_transp(i_state,k_sd)
-            delta_ii_(i_state,p1) -= hdress / psi_ref_coef(p1,i_state) * psi_non_ref_coef_transp(i_state,k_sd)
-            !$OMP ATOMIC
-            delta_ij_s2_(i_state,k_sd,p1) += sdress
-            !$OMP ATOMIC
-            !delta_ii_s2_(i_state,i_I) = delta_ii_s2_(i_state,i_I) - dIa_sla(i_state,k_sd) * ci_inv(i_state) * psi_non_ref_coef_transp(i_state,k_sd)
-            delta_ii_s2_(i_state,p1) -= sdress / psi_ref_coef(p1,i_state) * psi_non_ref_coef_transp(i_state,k_sd)
-          enddo
-        else
-          !stop "dress with coef < 1d-3"
-          delta_ii_(i_state,1)  = 0.d0
-          do l_sd=1,idx_alpha(0)
-            k_sd = idx_alpha(l_sd)
-            p1 = 1
-            hdress = dIa_hla(i_state,k_sd) * psi_ref_coef(i_I,i_state) / psi_ref_coef(p1,i_state)
-            sdress = dIa_sla(i_state,k_sd) * psi_ref_coef(i_I,i_state) / psi_ref_coef(p1,i_state)
-            !$OMP ATOMIC
-            delta_ij_(i_state,k_sd,p1) = delta_ij_(i_state,k_sd,p1) + 0.5d0*hdress
-            !$OMP ATOMIC
-            delta_ij_s2_(i_state,k_sd,p1) = delta_ij_s2_(i_state,k_sd,p1) + 0.5d0*sdress
-          enddo
-        endif
+        do l_sd=1,idx_alpha(0)
+          k_sd = idx_alpha(l_sd)
+          hdress = dIa_hla(i_state,k_sd) * psi_ref_coef(i_I,i_state) * c0(i_state)
+          sdress = dIa_sla(i_state,k_sd) * psi_ref_coef(i_I,i_state) * c0(i_state)
+          !$OMP ATOMIC
+          contrib(i_state) += hdress * psi_coef(dressed_column_idx(i_state), i_state) * psi_non_ref_coef(k_sd, i_state)
+          !$OMP ATOMIC
+          delta_ij_(i_state,k_sd) += hdress
+          !$OMP ATOMIC
+          delta_ij_s2_(i_state,k_sd) += sdress
+        enddo
       enddo
     enddo
   enddo
@@ -611,15 +571,13 @@ end
 
 
 
-subroutine mrcc_part_dress_1c(delta_ij_, delta_ii_,delta_ij_s2_, delta_ii_s2_,i_generator,n_selected,det_buffer,Nint,key_mask,contrib)
+subroutine mrcc_part_dress_1c(delta_ij_, delta_ij_s2_, i_generator,n_selected,det_buffer,Nint,key_mask,contrib)
  use bitmasks
  implicit none
 
   integer, intent(in)            :: i_generator,n_selected, Nint
   double precision, intent(inout) :: delta_ij_(N_states,N_det_non_ref)
-  double precision, intent(inout) :: delta_ii_(N_states)
   double precision, intent(inout) :: delta_ij_s2_(N_states,N_det_non_ref)
-  double precision, intent(inout) :: delta_ii_s2_(N_states)
 
   integer(bit_kind), intent(in)  :: det_buffer(Nint,2,n_selected)
   integer                        :: i,j,k,l,m
@@ -715,6 +673,11 @@ subroutine mrcc_part_dress_1c(delta_ij_, delta_ii_,delta_ij_s2_, delta_ii_s2_,i_
     end if
   end if
       
+  double precision :: c0(N_states)
+  do i_state=1,N_states
+    c0(i_state) = 1.d0/psi_coef(dressed_column_idx(i_state),i_state)
+  enddo
+
  
   do i_alpha=1,N_tq
    if(key_mask(1,1) /= 0) then
@@ -850,39 +813,17 @@ subroutine mrcc_part_dress_1c(delta_ij_, delta_ii_,delta_ij_s2_, delta_ii_s2_,i_
         enddo
       enddo
       do i_state=1,N_states
-        if(dabs(psi_ref_coef(1,i_state)).ge.1.d-3)then
           do l_sd=1,idx_alpha(0)
             k_sd = idx_alpha(l_sd)
-            p1 = 1
-            hdress = dIa_hla(i_state,k_sd) * psi_ref_coef(i_I,i_state) / psi_ref_coef(p1,i_state)
-            sdress = dIa_sla(i_state,k_sd) * psi_ref_coef(i_I,i_state) / psi_ref_coef(p1,i_state)
+            hdress = dIa_hla(i_state,k_sd) * psi_ref_coef(i_I,i_state) * c0(i_state)
+            sdress = dIa_sla(i_state,k_sd) * psi_ref_coef(i_I,i_state) * c0(i_state)
             !$OMP ATOMIC
-            contrib(i_state) += hdress * psi_ref_coef(p1, i_state) * psi_non_ref_coef(k_sd, i_state)
+            contrib(i_state) += hdress * psi_ref_coef(dressed_column_idx(i_state), i_state) * psi_non_ref_coef(k_sd, i_state)
             !$OMP ATOMIC
             delta_ij_(i_state,k_sd) += hdress
             !$OMP ATOMIC
-            !delta_ii_(i_state,i_I) = delta_ii_(i_state,i_I) - dIa_hla(i_state,k_sd) * ci_inv(i_state) * psi_non_ref_coef_transp(i_state,k_sd)
-            delta_ii_(i_state) -= hdress / psi_ref_coef(p1,i_state) * psi_non_ref_coef_transp(i_state,k_sd)
-            !$OMP ATOMIC
             delta_ij_s2_(i_state,k_sd) += sdress
-            !$OMP ATOMIC
-            !delta_ii_s2_(i_state,i_I) = delta_ii_s2_(i_state,i_I) - dIa_sla(i_state,k_sd) * ci_inv(i_state) * psi_non_ref_coef_transp(i_state,k_sd)
-            delta_ii_s2_(i_state) -= sdress / psi_ref_coef(p1,i_state) * psi_non_ref_coef_transp(i_state,k_sd)
           enddo
-        else
-          !stop "dress with coef < 1d-3"
-          delta_ii_(i_state)  = 0.d0
-          do l_sd=1,idx_alpha(0)
-            k_sd = idx_alpha(l_sd)
-            p1 = 1
-            hdress = dIa_hla(i_state,k_sd) * psi_ref_coef(i_I,i_state) / psi_ref_coef(p1,i_state)
-            sdress = dIa_sla(i_state,k_sd) * psi_ref_coef(i_I,i_state) / psi_ref_coef(p1,i_state)
-            !$OMP ATOMIC
-            delta_ij_(i_state,k_sd) = delta_ij_(i_state,k_sd) + 0.5d0*hdress
-            !$OMP ATOMIC
-            delta_ij_s2_(i_state,k_sd) = delta_ij_s2_(i_state,k_sd) + 0.5d0*sdress
-          enddo
-        endif
       enddo
     enddo
   enddo
@@ -900,10 +841,8 @@ end
  END_PROVIDER
 
 
- BEGIN_PROVIDER [ double precision, delta_ij_mrcc_zmq, (N_states,N_det_non_ref,N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ii_mrcc_zmq, (N_states, N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ij_s2_mrcc_zmq, (N_states,N_det_non_ref,N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ii_s2_mrcc_zmq, (N_states, N_det_ref) ]  
+ BEGIN_PROVIDER [ double precision, delta_ij_mrcc_zmq, (N_states,N_det_non_ref) ]
+&BEGIN_PROVIDER [ double precision, delta_ij_s2_mrcc_zmq, (N_states,N_det_non_ref) ]
   use bitmasks
   implicit none
 
@@ -917,9 +856,7 @@ end
 
 
   delta_ij_mrcc_zmq = 0d0
-  delta_ii_mrcc_zmq = 0d0
   delta_ij_s2_mrcc_zmq = 0d0
-  delta_ii_s2_mrcc_zmq = 0d0
 
   !call random_seed()
   E_CI_before = mrcc_E0_denominator(1) + nuclear_repulsion
@@ -933,142 +870,67 @@ end
   call ZMQ_mrcc(E_CI_before, mrcc, delta_ij_mrcc_zmq, delta_ij_s2_mrcc_zmq, abs(target_error))
 
   mrcc_previous_E(:) = mrcc_E0_denominator(:)
-  do i=N_det_non_ref,1,-1
-    delta_ii_mrcc_zmq(:,1) -= delta_ij_mrcc_zmq(:, i, 1) / psi_ref_coef(1,1) * psi_non_ref_coef(i, 1)
-    delta_ii_s2_mrcc_zmq(:,1) -= delta_ij_s2_mrcc_zmq(:, i, 1) / psi_ref_coef(1,1) * psi_non_ref_coef(i, 1)
-  end do
 END_PROVIDER
 
 
- BEGIN_PROVIDER [ double precision, delta_ij, (N_states,N_det_non_ref,N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ii, (N_states, N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ij_s2, (N_states,N_det_non_ref,N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ii_s2, (N_states, N_det_ref) ]
+ BEGIN_PROVIDER [ double precision, delta_ij, (N_states,N_det_non_ref) ]
+&BEGIN_PROVIDER [ double precision, delta_ij_s2, (N_states,N_det_non_ref) ]
   use bitmasks
   implicit none
   integer                        :: i, j, i_state
-  !mrmode : 1=mrcepa0, 2=mrsc2 add, 3=mrcc
+  !mrmode : 1=mrcepa0, 2=mrsc2 add, 3=mrcc, 4=stoch
   if(mrmode == 4) then
-    do i = 1, N_det_ref
-      do i_state = 1, N_states
-        delta_ii(i_state,i)= delta_ii_mrcc_sto(i_state,i)
-        delta_ii_s2(i_state,i)= delta_ii_s2_mrcc_sto(i_state,i)
-      enddo
       do j = 1, N_det_non_ref
         do i_state = 1, N_states
-          delta_ij(i_state,j,i) = delta_ij_mrcc_sto(i_state,j,i)
-          delta_ij_s2(i_state,j,i) = delta_ij_s2_mrcc_sto(i_state,j,i)
+          delta_ij(i_state,j) = delta_ij_mrcc_sto(i_state,j)
+          delta_ij_s2(i_state,j) = delta_ij_s2_mrcc_sto(i_state,j)
         enddo
       end do
-    end do
 !  else if(mrmode == 10) then
-!    do i = 1, N_det_ref
-!      do i_state = 1, N_states
-!        delta_ii(i_state,i)= delta_ii_mrsc2(i_state,i)
-!        delta_ii_s2(i_state,i)= delta_ii_s2_mrsc2(i_state,i)
-!      enddo
 !      do j = 1, N_det_non_ref
 !        do i_state = 1, N_states
-!          delta_ij(i_state,j,i) = delta_ij_mrsc2(i_state,j,i)
-!          delta_ij_s2(i_state,j,i) = delta_ij_s2_mrsc2(i_state,j,i)
+!          delta_ij(i_state,j) = delta_ij_mrsc2(i_state,j)
+!          delta_ij_s2(i_state,j) = delta_ij_s2_mrsc2(i_state,j)
 !        enddo
 !      end do
-!    end do
   else if(mrmode == 5) then
-    do i = 1, N_det_ref
-      do i_state = 1, N_states
-        delta_ii(i_state,i)= delta_ii_mrcc_zmq(i_state,i)
-        delta_ii_s2(i_state,i)= delta_ii_s2_mrcc_zmq(i_state,i)
-      enddo
       do j = 1, N_det_non_ref
         do i_state = 1, N_states
-          delta_ij(i_state,j,i) = delta_ij_mrcc_zmq(i_state,j,i)
-          delta_ij_s2(i_state,j,i) = delta_ij_s2_mrcc_zmq(i_state,j,i)
+          delta_ij(i_state,j) = delta_ij_mrcc_zmq(i_state,j)
+          delta_ij_s2(i_state,j) = delta_ij_s2_mrcc_zmq(i_state,j)
         enddo
       end do
-    end do
   else  if(mrmode == 3) then
-    do i = 1, N_det_ref
-      do i_state = 1, N_states
-        delta_ii(i_state,i)= delta_ii_mrcc(i_state,i)
-        delta_ii_s2(i_state,i)= delta_ii_s2_mrcc(i_state,i)
-      enddo
       do j = 1, N_det_non_ref
         do i_state = 1, N_states
-          delta_ij(i_state,j,i) = delta_ij_mrcc(i_state,j,i)
-          delta_ij_s2(i_state,j,i) = delta_ij_s2_mrcc(i_state,j,i)
+          delta_ij(i_state,j) = delta_ij_mrcc(i_state,j)
+          delta_ij_s2(i_state,j) = delta_ij_s2_mrcc(i_state,j)
         enddo
       end do
-    end do
-
-    ! =-=-= BEGIN STATE AVERAGE
-!    do i = 1, N_det_ref
-!      delta_ii(:,i)= delta_ii_mrcc(1,i)
-!      delta_ii_s2(:,i)= delta_ii_s2_mrcc(1,i)
-!      do i_state = 2, N_states
-!        delta_ii(:,i) += delta_ii_mrcc(i_state,i)
-!        delta_ii_s2(:,i) += delta_ii_s2_mrcc(i_state,i)
-!      enddo
-!      do j = 1, N_det_non_ref
-!        delta_ij(:,j,i) = delta_ij_mrcc(1,j,i)
-!        delta_ij_s2(:,j,i) = delta_ij_s2_mrcc(1,j,i)
-!        do i_state = 2, N_states
-!          delta_ij(:,j,i) += delta_ij_mrcc(i_state,j,i)
-!          delta_ij_s2(:,j,i) += delta_ij_s2_mrcc(i_state,j,i)
-!        enddo
-!      end do
-!    end do
-!    delta_ij = delta_ij * (1.d0/dble(N_states))
-!    delta_ii = delta_ii * (1.d0/dble(N_states))
-    ! =-=-= END STATE AVERAGE
-    !
-    !       do i = 1, N_det_ref
-    !         delta_ii(i_state,i)= delta_mrcepa0_ii(i,i_state) - delta_sub_ii(i,i_state)
-    !         do j = 1, N_det_non_ref
-    !           delta_ij(i_state,j,i) = delta_mrcepa0_ij(i,j,i_state) - delta_sub_ij(i,j,i_state)
-    !         end do
-    !       end do
   else if(mrmode == 2) then
-    do i = 1, N_det_ref
-      do i_state = 1, N_states
-        delta_ii(i_state,i)= delta_ii_old(i_state,i)
-        delta_ii_s2(i_state,i)= delta_ii_s2_old(i_state,i)
-      enddo
       do j = 1, N_det_non_ref
         do i_state = 1, N_states
-          delta_ij(i_state,j,i) = delta_ij_old(i_state,j,i)
-          delta_ij_s2(i_state,j,i) = delta_ij_s2_old(i_state,j,i)
+          delta_ij(i_state,j) = delta_ij_old(i_state,j)
+          delta_ij_s2(i_state,j) = delta_ij_s2_old(i_state,j)
         enddo
       end do
-    end do
   else if(mrmode == 1) then
-    do i = 1, N_det_ref
-      do i_state = 1, N_states
-        delta_ii(i_state,i)= delta_mrcepa0_ii(i,i_state)
-        delta_ii_s2(i_state,i)= delta_mrcepa0_ii_s2(i,i_state)
-      enddo
       do j = 1, N_det_non_ref
         do i_state = 1, N_states
-          delta_ij(i_state,j,i) = delta_mrcepa0_ij(i,j,i_state)
-          delta_ij_s2(i_state,j,i) = delta_mrcepa0_ij_s2(i,j,i_state)
+          delta_ij(i_state,j) = delta_mrcepa0_ij(j,i_state)
+          delta_ij_s2(i_state,j) = delta_mrcepa0_ij_s2(j,i_state)
         enddo
       end do
-    end do
   else
     stop "invalid mrmode"
   end if
 
   !if(mrmode == 2 .or. mrmode == 3) then
-  !   do i = 1, N_det_ref
-  !    do i_state = 1, N_states
-  !      delta_ii(i_state,i) += delta_ii_cancel(i_state,i)
-  !    enddo
   !    do j = 1, N_det_non_ref
   !      do i_state = 1, N_states
-  !        delta_ij(i_state,j,i) += delta_ij_cancel(i_state,j,i)
+  !        delta_ij(i_state,j) += delta_ij_cancel(i_state,j)
   !      enddo
   !    end do
-  !  end do
   !end if
 END_PROVIDER
 
@@ -1350,10 +1212,8 @@ subroutine getHP(a,h,p,Nint)
 end subroutine
 
 
- BEGIN_PROVIDER [ double precision, delta_mrcepa0_ij, (N_det_ref,N_det_non_ref,N_states) ]
-&BEGIN_PROVIDER [ double precision, delta_mrcepa0_ii, (N_det_ref,N_states) ]
-&BEGIN_PROVIDER [ double precision, delta_mrcepa0_ij_s2, (N_det_ref,N_det_non_ref,N_states) ]
-&BEGIN_PROVIDER [ double precision, delta_mrcepa0_ii_s2, (N_det_ref,N_states) ]
+ BEGIN_PROVIDER [ double precision, delta_mrcepa0_ij, (N_det_non_ref,N_states) ]
+&BEGIN_PROVIDER [ double precision, delta_mrcepa0_ij_s2, (N_det_non_ref,N_states) ]
   use bitmasks
   implicit none
   
@@ -1361,7 +1221,7 @@ end subroutine
   integer                         :: p1,p2,h1,h2,s1,s2, p1_,p2_,h1_,h2_,s1_,s2_, sortRefIdx(N_det_ref)
   logical                         :: ok
   double precision                :: phase_iI, phase_Ik, phase_Jl, phase_IJ, phase_al, diI, hIi, hJi, delta_JI, dkI(1), HkI, ci_inv(1), dia_hla(1)
-  double precision                :: contrib, contrib2,  contrib_s2, contrib2_s2,  HIIi, HJk, wall
+  double precision                :: contrib, contrib_s2, HIIi, HJk, wall
   integer, dimension(0:2,2,2)     :: exc_iI, exc_Ik, exc_IJ
   integer(bit_kind)               :: det_tmp(N_int, 2), made_hole(N_int,2), made_particle(N_int,2), myActive(N_int,2)
   integer(bit_kind),allocatable   :: sortRef(:,:,:)
@@ -1383,20 +1243,23 @@ end subroutine
     idx_sorted_bit(get_index_in_psi_det_sorted_bit(psi_non_ref(1,1,i), N_int)) = i
   enddo
     
+  double precision :: c0(N_states)
+  do i_state=1,N_states
+    c0(i_state) = 1.d0/psi_coef(dressed_column_idx(i_state),i_state)
+  enddo
+
   ! To provide everything
   contrib = dij(1, 1, 1)
   
-  delta_mrcepa0_ii(:,:) = 0d0
-  delta_mrcepa0_ij(:,:,:) = 0d0
-  delta_mrcepa0_ii_s2(:,:) = 0d0
-  delta_mrcepa0_ij_s2(:,:,:) = 0d0
+  delta_mrcepa0_ij(:,:) = 0d0
+  delta_mrcepa0_ij_s2(:,:) = 0d0
 
   do i_state = 1, N_states
-    !$OMP PARALLEL DO default(none) schedule(dynamic) shared(delta_mrcepa0_ij, delta_mrcepa0_ii, delta_mrcepa0_ij_s2, delta_mrcepa0_ii_s2)       &
-    !$OMP private(m,i,II,J,k,degree,myActive,made_hole,made_particle,hjk,contrib,contrib2,contrib_s2,contrib2_s2) &
+    !$OMP PARALLEL DO default(none) schedule(dynamic) shared(delta_mrcepa0_ij, delta_mrcepa0_ij_s2)       &
+    !$OMP private(m,i,II,J,k,degree,myActive,made_hole,made_particle,hjk,contrib,contrib_s2) &
     !$OMP shared(active_sorb, psi_non_ref, psi_non_ref_coef, psi_ref, psi_ref_coef, cepa0_shortcut, det_cepa0_active)     &
     !$OMP shared(N_det_ref, N_det_non_ref,N_int,det_cepa0_idx,lambda_mrcc,det_ref_active, delta_cas, delta_cas_s2) &
-    !$OMP shared(notf,i_state, sortRef, sortRefIdx, dij)
+    !$OMP shared(notf,i_state, sortRef, sortRefIdx, dij,c0)
     do blok=1,cepa0_shortcut(0)
     do i=cepa0_shortcut(blok), cepa0_shortcut(blok+1)-1
       do II=1,N_det_ref
@@ -1436,23 +1299,12 @@ end subroutine
           !$OMP ATOMIC
           notf = notf+1
 
-!          call i_h_j(psi_non_ref(1,1,det_cepa0_idx(k)),psi_ref(1,1,J),N_int,HJk)
           contrib = delta_cas(II, J, i_state)* dij(J, det_cepa0_idx(k), i_state)
           contrib_s2 = delta_cas_s2(II, J, i_state)  * dij(J, det_cepa0_idx(k), i_state)
           
-          if(dabs(psi_ref_coef(J,i_state)).ge.1.d-3) then
-            contrib2 = contrib / psi_ref_coef(J, i_state) * psi_non_ref_coef(det_cepa0_idx(i),i_state)
-            contrib2_s2 = contrib_s2 / psi_ref_coef(J, i_state) * psi_non_ref_coef(det_cepa0_idx(i),i_state)
-            !$OMP ATOMIC
-            delta_mrcepa0_ii(J,i_state) -= contrib2 
-            delta_mrcepa0_ii_s2(J,i_state) -= contrib2_s2 
-          else
-            contrib = contrib * 0.5d0
-            contrib_s2 = contrib_s2 * 0.5d0
-          end if
           !$OMP ATOMIC
-          delta_mrcepa0_ij(J, det_cepa0_idx(i), i_state) += contrib
-          delta_mrcepa0_ij_s2(J, det_cepa0_idx(i), i_state) += contrib_s2
+          delta_mrcepa0_ij(det_cepa0_idx(i), i_state) += contrib * c0(i_state) * psi_ref_coef(J,i_state)
+          delta_mrcepa0_ij_s2(det_cepa0_idx(i), i_state) += contrib_s2 * c0(i_state) * psi_ref_coef(J,i_state)
 
         end do kloop
       end do
@@ -1467,8 +1319,7 @@ end subroutine
 END_PROVIDER
 
 
- BEGIN_PROVIDER [ double precision, delta_sub_ij, (N_det_ref,N_det_non_ref,N_states) ]
-&BEGIN_PROVIDER [ double precision, delta_sub_ii, (N_det_ref, N_states) ]
+BEGIN_PROVIDER [ double precision, delta_sub_ij, (N_det_non_ref,N_states) ]
   use bitmasks
   implicit none
   
@@ -1476,7 +1327,7 @@ END_PROVIDER
   integer                         :: p1,p2,h1,h2,s1,s2, p1_,p2_,h1_,h2_,s1_,s2_
   logical                         :: ok
   double precision                :: phase_Ji, phase_Ik, phase_Ii
-  double precision                :: contrib, contrib2, delta_IJk, HJk, HIk, HIl
+  double precision                :: contrib, delta_IJk, HJk, HIk, HIl
   integer, dimension(0:2,2,2)     :: exc_Ik, exc_Ji, exc_Ii
   integer(bit_kind)               :: det_tmp(N_int, 2), det_tmp2(N_int, 2)
   integer, allocatable            :: idx_sorted_bit(:)
@@ -1490,21 +1341,27 @@ END_PROVIDER
   do i=1,N_det_non_ref
     idx_sorted_bit(get_index_in_psi_det_sorted_bit(psi_non_ref(1,1,i), N_int)) = i
   enddo
+
+  double precision :: c0(N_states)
+  do i_state=1,N_states
+    c0(i_state) = 1.d0/psi_coef(dressed_column_idx(i_state),i_state)
+  enddo
+
+
     
   do i_state = 1, N_states
-    delta_sub_ij(:,:,:) = 0d0
-    delta_sub_ii(:,:) = 0d0
+    delta_sub_ij(:,:) = 0d0
     
     provide mo_bielec_integrals_in_map
     
     
-    !$OMP PARALLEL DO default(none) schedule(dynamic,10) shared(delta_sub_ij, delta_sub_ii)       &
+    !$OMP PARALLEL DO default(none) schedule(dynamic,10) shared(delta_sub_ij)       &
     !$OMP private(i, J, k, degree, degree2, l, deg, ni)       &
     !$OMP private(p1,p2,h1,h2,s1,s2, p1_,p2_,h1_,h2_,s1_,s2_)     &
-    !$OMP private(ok, phase_Ji, phase_Ik, phase_Ii, contrib2, contrib, delta_IJk, HJk, HIk, HIl, exc_Ik, exc_Ji, exc_Ii) &
+    !$OMP private(ok, phase_Ji, phase_Ik, phase_Ii, contrib, delta_IJk, HJk, HIk, HIl, exc_Ik, exc_Ji, exc_Ii) &
     !$OMP private(det_tmp, det_tmp2, II, blok)    &
     !$OMP shared(idx_sorted_bit, N_det_non_ref, N_det_ref, N_int, psi_non_ref, psi_non_ref_coef, psi_ref, psi_ref_coef)   &
-    !$OMP shared(i_state,lambda_mrcc, hf_bitmask, active_sorb)
+    !$OMP shared(i_state,lambda_mrcc, hf_bitmask, active_sorb,c0)
     do i=1,N_det_non_ref
       if(mod(i,1000) == 0) print *, i, "/", N_det_non_ref
       do J=1,N_det_ref
@@ -1551,15 +1408,8 @@ END_PROVIDER
             call apply_excitation(psi_non_ref(1,1,i),exc_Ik,det_tmp,ok,N_int)
             if(ok) cycle
             contrib = delta_IJk * HIl * lambda_mrcc(i_state,l)   
-            if(dabs(psi_ref_coef(II,i_state)).ge.1.d-3) then
-              contrib2 = contrib / psi_ref_coef(II, i_state) * psi_non_ref_coef(l,i_state)
-              !$OMP ATOMIC
-              delta_sub_ii(II,i_state) -= contrib2
-            else
-              contrib = contrib * 0.5d0
-            endif
             !$OMP ATOMIC
-            delta_sub_ij(II, i, i_state) += contrib
+            delta_sub_ij(i, i_state) += contrib* c0(i_state) * psi_ref_coef(II,i_state)
           end do
         end do
       end do

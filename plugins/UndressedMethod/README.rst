@@ -1,8 +1,8 @@
-=====
-GASPI
-=====
+===============
+UndressedMethod
+===============
 
-Providers for GASPI programs (with the GPI2 library).
+Defines a null dressing vector
 
 Needed Modules
 ==============

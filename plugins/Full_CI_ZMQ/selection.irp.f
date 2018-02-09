@@ -623,6 +623,9 @@ subroutine fill_buffer_double(i_generator, sp, h1, h2, bannedOrb, banned, fock_d
       Hii = diag_H_mat_elem_fock(psi_det_generators(1,1,i_generator),det,fock_diag_tmp,N_int)
       min_e_pert = 0d0
       
+!     double precision :: hij       
+!     call i_h_j(psi_det_generators(1,1,i_generator), det, N_int, hij)
+
       do istate=1,N_states
         delta_E = E0(istate) - Hii
         val = mat(istate, p1, p2) + mat(istate, p1, p2) 
@@ -633,7 +636,7 @@ subroutine fill_buffer_double(i_generator, sp, h1, h2, bannedOrb, banned, fock_d
         e_pert = 0.5d0 * (tmp - delta_E)
         pt2(istate) = pt2(istate) + e_pert
         min_e_pert = min(e_pert,min_e_pert)
-!        ci(istate) = e_pert / mat(istate, p1, p2)
+!        ci(istate) = e_pert / hij
       end do
       
       if(min_e_pert <= buf%mini) then
