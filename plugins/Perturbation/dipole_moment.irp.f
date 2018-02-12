@@ -12,7 +12,7 @@ subroutine pt2_dipole_moment_z(det_pert,c_pert,e_2_pert,H_pert_diag,Nint,ndet,n_
   integer(bit_kind), intent(in)  :: minilist(Nint,2,N_det_selectors)
   
   BEGIN_DOC
-  ! compute the perturbatibe contribution to the dipole moment of one determinant
+  ! compute the perturbative contribution to the dipole moment of one determinant
   !
   ! for the various n_st states, at various level of theory.
   !
