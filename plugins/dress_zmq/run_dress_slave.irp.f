@@ -29,19 +29,11 @@ subroutine run_dress_slave(thread,iproc,energy)
   double precision,allocatable :: dress_detail(:)
   integer :: ind
   
-  integer(bit_kind),allocatable :: abuf(:,:,:)
-  integer(bit_kind) :: mask(N_int,2), omask(N_int,2)
- 
   double precision,allocatable :: delta_ij_loc(:,:,:) 
-  double precision,allocatable :: delta_ii_loc(:,:) 
   integer :: h,p,n
   logical :: ok
-  double precision :: contrib(N_states)
 
-  allocate(delta_ij_loc(N_states,N_det_non_ref,2) &
-  ,delta_ii_loc(N_states,2))
-  allocate(abuf(N_int, 2, N_det_non_ref))
-  allocate(dress_detail(N_states))
+  allocate(delta_ij_loc(N_states,N_det,2)) 
   
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
   zmq_socket_push      = new_zmq_push_socket(thread)
@@ -52,47 +44,15 @@ subroutine run_dress_slave(thread,iproc,energy)
     call end_zmq_push_socket(zmq_socket_push,thread)
     return
   end if
-  dress_detail = 0d0
   do
     call get_task_from_taskserver(zmq_to_qp_run_socket,worker_id, task_id, task)
     
     if(task_id /= 0) then
       read (task,*) subset, i_generator
-      contrib = 0d0
       delta_ij_loc = 0d0
-      delta_ii_loc = 0d0
-      if(do_dress_with_alpha_buffer .or. do_dress_with_alpha) then
-        do h=1, hh_shortcut(0)
-          call apply_hole_local(psi_det_generators(1,1,i_generator), hh_exists(1, h), mask, ok, N_int)
-          if(.not. ok) cycle
-          omask = 0_bit_kind
-          if(hh_exists(1, h) /= 0) omask = mask
-          n = 1
-          do p=hh_shortcut(h), hh_shortcut(h+1)-1
-            call apply_particle_local(mask, pp_exists(1, p), abuf(1,1,n), ok, N_int)
-            if(ok) n = n + 1
-            if(n > N_det_non_ref) stop "Buffer too small in dress..."
-          end do
-          n = n - 1
-
-          if(n /= 0) then
-            if(do_dress_with_alpha_buffer) then
-              call dress_with_alpha_buffer(delta_ij_loc(1,1,1), delta_ii_loc(1,1), delta_ij_loc(1,1,2), delta_ii_loc(1,2), &
-                    i_generator,n,abuf,N_int,omask,contrib)
-            else
-              stop 'dress_with_alpha not implemented yet'
-            end if
-          endif
-        end do
-      else if(do_dress_with_generator) then
-        stop 'dress_with_generator not implemented yet'
-      else
-        stop 'no dressing level defined'
-      end if
-      dress_detail(:) = contrib
+      call alpha_callback(delta_ij_loc, i_generator, subset)
       call task_done_to_taskserver(zmq_to_qp_run_socket,worker_id,task_id)
-      call push_dress_results(zmq_socket_push, i_generator, dress_detail, delta_ij_loc(1,1,1), task_id)
-      dress_detail(:) = 0d0
+      call push_dress_results(zmq_socket_push, i_generator, delta_ij_loc, task_id)
     else
       exit
     end if
@@ -103,13 +63,12 @@ subroutine run_dress_slave(thread,iproc,energy)
 end subroutine
 
 
-subroutine push_dress_results(zmq_socket_push, ind, dress_detail, delta_loc, task_id)
+subroutine push_dress_results(zmq_socket_push, ind, delta_loc, task_id)
   use f77_zmq
   implicit none
 
   integer(ZMQ_PTR), intent(in)   :: zmq_socket_push
-  double precision, intent(in)   :: dress_detail(N_states, N_det_generators)
-  double precision, intent(in)   :: delta_loc(N_states, N_det_non_ref, 2)
+  double precision, intent(in)   :: delta_loc(N_states, N_det, 2)
   integer, intent(in) :: ind, task_id
   integer :: rc, i
   
@@ -118,16 +77,9 @@ subroutine push_dress_results(zmq_socket_push, ind, dress_detail, delta_loc, tas
   if(rc /= 4) stop "push"
 
 
-  rc = f77_zmq_send( zmq_socket_push, dress_detail, 8*N_states, ZMQ_SNDMORE)
-  if(rc /= 8*N_states) stop "push"
-
-  rc = f77_zmq_send( zmq_socket_push, delta_loc(1,1,1), 8*N_states*N_det_non_ref, ZMQ_SNDMORE)
-  if(rc /= 8*N_states*N_det_non_ref) stop "push"
+  rc = f77_zmq_send( zmq_socket_push, delta_loc, 8*N_states*N_det*2, ZMQ_SNDMORE)
+  if(rc /= 8*N_states*N_det*2) stop "push"
   
-  rc = f77_zmq_send( zmq_socket_push, delta_loc(1,1,2), 8*N_states*N_det_non_ref, ZMQ_SNDMORE)
-  if(rc /= 8*N_states*N_det_non_ref) stop "push"
-
-
   rc = f77_zmq_send( zmq_socket_push, task_id, 4, 0)
   if(rc /= 4) stop "push"
 
@@ -141,30 +93,21 @@ IRP_ENDIF
 end subroutine
 
 
-subroutine pull_dress_results(zmq_socket_pull, ind, dress_detail, delta_loc, task_id)
+subroutine pull_dress_results(zmq_socket_pull, ind, delta_loc, task_id)
   use f77_zmq
   implicit none
   integer(ZMQ_PTR), intent(in)   :: zmq_socket_pull
-  double precision, intent(inout) :: dress_detail(N_states)
-  double precision, intent(inout) :: delta_loc(N_states, N_det_non_ref, 2)
-  double precision, allocatable :: dress_dress_mwen(:,:)
+  double precision, intent(inout) :: delta_loc(N_states, N_det, 2)
   integer, intent(out) :: ind
   integer, intent(out) :: task_id
-  integer :: rc, rn, i
+  integer :: rc, i
 
-  allocate(dress_dress_mwen(N_states, N_det_non_ref))
 
   rc = f77_zmq_recv( zmq_socket_pull, ind, 4, 0)
   if(rc /= 4) stop "pull"
   
-  rc = f77_zmq_recv( zmq_socket_pull, dress_detail, N_states*8, 0)
-  if(rc /= 8*N_states) stop "pull"
-  
-  rc = f77_zmq_recv( zmq_socket_pull, delta_loc(1,1,1), N_states*8*N_det_non_ref, 0)
-  if(rc /= 8*N_states*N_det_non_ref) stop "pull"
-
-  rc = f77_zmq_recv( zmq_socket_pull, delta_loc(1,1,2), N_states*8*N_det_non_ref, 0)
-  if(rc /= 8*N_states*N_det_non_ref) stop "pull"
+  rc = f77_zmq_recv( zmq_socket_pull, delta_loc, N_states*8*N_det*2, 0)
+  if(rc /= 8*N_states*N_det*2) stop "pull"
 
   rc = f77_zmq_recv( zmq_socket_pull, task_id, 4, 0)
   if(rc /= 4) stop "pull"

@@ -64,10 +64,7 @@ END_PROVIDER
 
 
 
- BEGIN_PROVIDER [ double precision, delta_ij, (N_states,N_det_non_ref, N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ii, (N_states, N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ij_s2, (N_states,N_det_non_ref, N_det_ref) ]
-&BEGIN_PROVIDER [ double precision, delta_ii_s2, (N_states, N_det_ref) ]  
+ BEGIN_PROVIDER [ double precision, delta_ij, (N_states,N_det,2) ]
   use bitmasks
   implicit none
 
@@ -77,18 +74,15 @@ END_PROVIDER
   double precision               :: E_CI_before, relative_error
   double precision, save :: errr = 0d0
 
-  allocate(dress(N_states), del(N_states, N_det_non_ref), del_s2(N_states, N_det_non_ref))
+  allocate(dress(N_states), del(N_states, N_det), del_s2(N_states, N_det))
 
   delta_ij = 0d0
-  delta_ii = 0d0
-  delta_ij_s2 = 0d0
-  delta_ii_s2 = 0d0
 
   E_CI_before = dress_E0_denominator(1) + nuclear_repulsion
   threshold_selectors = 1.d0
   threshold_generators = 1d0 
   if(errr /= 0d0) then
-    errr = errr / 2d0 !
+    errr = errr / 2d0 
   else
     errr = 1d-4
   end if
@@ -97,11 +91,12 @@ END_PROVIDER
   call ZMQ_dress(E_CI_before, dress, del, del_s2, abs(relative_error))
   
   delta_ij(:,:,1) = del(:,:)
-  delta_ij_s2(:,:,1) = del_s2(:,:)
-  do i=N_det_non_ref,1,-1
-    delta_ii(dress_stoch_istate,1) -= delta_ij(dress_stoch_istate, i, 1) / psi_ref_coef(1,dress_stoch_istate) * psi_non_ref_coef(i, dress_stoch_istate)
-    delta_ii_s2(dress_stoch_istate,1) -= delta_ij_s2(dress_stoch_istate, i, 1) / psi_ref_coef(1,dress_stoch_istate) * psi_non_ref_coef(i, dress_stoch_istate)
-  end do
+  !delta_ij_s2(:,:,1) = del_s2(:,:)
+  delta_ij(:,:,2) = del_s2(:,:)
+  !do i=N_det,1,-1
+  !  delta_ii(dress_stoch_istate,1) -= delta_ij(dress_stoch_istate, i, 1) / psi_ref_coef(1,dress_stoch_istate) * psi_coef(i, dress_stoch_istate)
+  !  delta_ii_s2(dress_stoch_istate,1) -= delta_ij_s2(dress_stoch_istate, i, 1) / psi_ref_coef(1,dress_stoch_istate) * psi_coef(i, dress_stoch_istate)
+  !end do
 END_PROVIDER
 
 

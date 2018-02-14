@@ -15,8 +15,8 @@ subroutine ZMQ_dress(E, dress, delta, delta_s2, relative_error)
   integer, external              :: omp_get_thread_num
   double precision, intent(in)   :: relative_error, E
   double precision, intent(out)  :: dress(N_states)
-  double precision, intent(out)  :: delta(N_states, N_det_non_ref)
-  double precision, intent(out)  :: delta_s2(N_states, N_det_non_ref)
+  double precision, intent(out)  :: delta(N_states, N_det)
+  double precision, intent(out)  :: delta_s2(N_states, N_det)
   
   
   integer                        :: i, j, k, Ncp
@@ -32,7 +32,7 @@ subroutine ZMQ_dress(E, dress, delta, delta_s2, relative_error)
   !!!!!!!!!!!!!!! demander a TOTO !!!!!!!
   w(:) = 0.d0
   w(dress_stoch_istate) = 1.d0
-  call update_psi_average_norm_contrib(w)
+  !call update_psi_average_norm_contrib(w)
   
   
   
@@ -135,8 +135,8 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   double precision, intent(out)  :: dress(N_states)
   double precision, allocatable  :: cp(:,:,:,:)
 
-  double precision, intent(out)  :: delta(N_states, N_det_non_ref)
-  double precision, intent(out)  :: delta_s2(N_states, N_det_non_ref)
+  double precision, intent(out)  :: delta(N_states, N_det)
+  double precision, intent(out)  :: delta_s2(N_states, N_det)
   double precision, allocatable  :: delta_loc(:,:,:), delta_det(:,:,:,:)
   double precision, allocatable  :: dress_detail(:,:)
   double precision               :: dress_mwen(N_states)
@@ -158,9 +158,9 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   
   delta = 0d0
   delta_s2 = 0d0
-  allocate(delta_det(N_states, N_det_non_ref, 0:comb_teeth+1, 2))
-  allocate(cp(N_states, N_det_non_ref, N_cp, 2), dress_detail(N_states, N_det_generators))
-  allocate(delta_loc(N_states, N_det_non_ref, 2))
+  allocate(delta_det(N_states, N_det, 0:comb_teeth+1, 2))
+  allocate(cp(N_states, N_det, N_cp, 2), dress_detail(N_states, N_det))
+  allocate(delta_loc(N_states, N_det, 2))
   dress_detail = 0d0
   delta_det = 0d0
   cp = 0d0
@@ -192,8 +192,8 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   loop = .true.
 
   pullLoop : do while (loop)
-    call pull_dress_results(zmq_socket_pull, ind, dress_mwen, delta_loc, task_id)
-
+    call pull_dress_results(zmq_socket_pull, ind, delta_loc, task_id)
+    dress_mwen(:) = 0d0 !!!!!!!! A CALCULER ICI
     dress_detail(:, ind) += dress_mwen(:)
     do j=1,N_cp !! optimizable
       if(cps(ind, j) > 0d0) then
@@ -202,7 +202,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
         integer :: toothMwen
         logical :: fracted
         fac = cps(ind, j) / cps_N(j) * dress_weight_inv(ind) * comb_step
-        do k=1,N_det_non_ref
+        do k=1,N_det
         do i_state=1,N_states
           cp(i_state,k,j,1) += delta_loc(i_state,k,1) * fac
           cp(i_state,k,j,2) += delta_loc(i_state,k,2) * fac
@@ -499,7 +499,7 @@ subroutine add_comb(com, computed, cp, N, tbc)
   implicit none
   double precision, intent(in) :: com
   integer, intent(inout) :: N
-  double precision, intent(inout) :: cp(N_det_non_ref)
+  double precision, intent(inout) :: cp(N_det)
   logical, intent(inout) :: computed(N_det_generators)
   integer, intent(inout) :: tbc(N_det_generators)
   integer :: i, k, l, dets(comb_teeth)

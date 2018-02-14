@@ -43,7 +43,7 @@ subroutine alpha_callback(delta_ij_loc, i_generator, subset)
   use bitmasks
   implicit none
   integer, intent(in)            :: i_generator, subset
-  double precision,intent(inout) :: delta_ij_loc(N_states,N_det_non_ref,2) 
+  double precision,intent(inout) :: delta_ij_loc(N_states,N_det,2) 
   
   integer :: k,l
 
@@ -63,7 +63,7 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
 !            WARNING /!\ : It is assumed that the generators and selectors are psi_det_sorted
   END_DOC
   
-  double precision,intent(inout) :: delta_ij_loc(N_states,N_det_non_ref,2) 
+  double precision,intent(inout) :: delta_ij_loc(N_states,N_det,2) 
   integer, intent(in)            :: i_generator, subset, bitmask_index
   
   integer                         :: h1,h2,s1,s2,s3,i1,i2,ib,sp,k,i,j,nt,ii,n
@@ -587,6 +587,115 @@ end
 
 
 
+subroutine count_pq(mask, sp, det, i_gen, N_sel, bannedOrb, banned, mat, interesting)
+  use bitmasks
+  implicit none
+  
+  integer, intent(in)            :: sp, i_gen, N_sel
+  integer, intent(in)            :: interesting(0:N_sel)
+  integer(bit_kind),intent(in)   :: mask(N_int, 2), det(N_int, 2, N_sel)
+  logical, intent(inout)         :: bannedOrb(mo_tot_num, 2), banned(mo_tot_num, mo_tot_num, 2)
+  integer, intent(inout)         :: mat(mo_tot_num, mo_tot_num)
+  
+  integer                        :: i, ii, j, k, l, h(0:2,2), p(0:4,2), nt
+  integer(bit_kind)              :: perMask(N_int, 2), mobMask(N_int, 2), negMask(N_int, 2)
+  integer                     :: phasemask(2,N_int*bit_kind_size)
+  
+  PROVIDE psi_selectors_coef_transp
+  mat = 0
+  
+  do i=1,N_int
+    negMask(i,1) = not(mask(i,1))
+    negMask(i,2) = not(mask(i,2))
+  end do
+
+  do i=1, N_sel ! interesting(0)
+    !i = interesting(ii)
+    if (interesting(i) < 0) then
+      stop 'prefetch interesting(i)'
+    endif
+
+    
+    mobMask(1,1) = iand(negMask(1,1), det(1,1,i))
+    mobMask(1,2) = iand(negMask(1,2), det(1,2,i))
+    nt = popcnt(mobMask(1, 1)) + popcnt(mobMask(1, 2))
+
+    if(nt > 4) cycle
+
+    do j=2,N_int
+      mobMask(j,1) = iand(negMask(j,1), det(j,1,i))
+      mobMask(j,2) = iand(negMask(j,2), det(j,2,i))
+      nt = nt + popcnt(mobMask(j, 1)) + popcnt(mobMask(j, 2))
+    end do
+
+    if(nt > 4) cycle
+    
+    if (interesting(i) == i_gen) then
+        if(sp == 3) then
+          do j=1,mo_tot_num
+            do k=1,mo_tot_num
+              banned(j,k,2) = banned(k,j,1)
+            enddo
+          enddo
+        else
+          do k=1,mo_tot_num
+          do l=k+1,mo_tot_num
+            banned(l,k,1) = banned(k,l,1)
+          end do
+          end do
+        end if
+    end if
+
+    call bitstring_to_list_in_selection(mobMask(1,1), p(1,1), p(0,1), N_int)
+    call bitstring_to_list_in_selection(mobMask(1,2), p(1,2), p(0,2), N_int)
+    
+    perMask(1,1) = iand(mask(1,1), not(det(1,1,i)))
+    perMask(1,2) = iand(mask(1,2), not(det(1,2,i)))
+    do j=2,N_int
+      perMask(j,1) = iand(mask(j,1), not(det(j,1,i)))
+      perMask(j,2) = iand(mask(j,2), not(det(j,2,i)))
+    end do
+
+    call bitstring_to_list_in_selection(perMask(1,1), h(1,1), h(0,1), N_int)
+    call bitstring_to_list_in_selection(perMask(1,2), h(1,2), h(0,2), N_int)
+
+    if (interesting(i) >= i_gen) then
+        call get_mask_phase(psi_det_sorted(1,1,interesting(i)), phasemask)
+        if(nt == 4) then
+          call count_d2(mat, p, sp)
+        else if(nt == 3) then
+          call count_d1(mat, p, sp)
+        else
+          mat(:,:) = mat(:,:) + 1
+        end if
+    else 
+        if(nt == 4) call past_d2(banned, p, sp)
+        if(nt == 3) call past_d1(bannedOrb, p)
+    end if
+  end do
+  
+  do i=1,mo_tot_num
+  do j=1,mo_tot_num
+    if(banned(i,j,1)) mat(i,j) = 0
+  end do
+  end do
+
+  if(sp == 3) then
+    do i=1,mo_tot_num
+      if(bannedOrb(i, 1)) mat(i, :) = 0
+      if(bannedOrb(i, 2)) mat(:, i) = 0
+    end do
+  else
+    do i=1,mo_tot_num
+      if(bannedOrb(i, sp)) then
+        mat(:,i) = 0
+        mat(i,:) = 0
+      end if
+    end do
+  end if
+end 
+
+
 
 subroutine splash_pq(mask, sp, det, i_gen, N_sel, bannedOrb, banned, mat, interesting)
   use bitmasks
@@ -1037,6 +1146,65 @@ subroutine past_d1(bannedOrb, p)
       bannedOrb(p(i, s), s) = .true.
     end do
   end do
+end 
+
+
+subroutine count_d1(mat, p, sp)
+  use bitmasks
+  implicit none
+
+  integer, intent(inout) :: mat(mo_tot_num, mo_tot_num)
+  integer, intent(in) :: p(0:4, 2), sp
+  integer :: i,s,j
+  
+
+  if(sp == 3) then
+    do i=1,p(0,1)
+      mat(p(i,1), :) += 1
+    end do
+    do i=1,p(0,2)
+      mat(:, p(i,2)) += 1
+    end do
+
+    do i=1,p(0,1)
+      do j=1,p(0,2)
+        mat(p(i,1), p(j,2)) -= 1
+      end do
+    end do
+  else
+    if(sp == 1 .and. p(0,2) /= 0) stop "count_d1 bug"
+    if(sp == 2 .and. p(0,1) /= 0) stop "count_d1 bug"
+    do i=1,p(0,sp)
+      mat(:p(i,sp), p(i,sp)) += 1
+      mat(p(i,sp), p(i,sp):) += 1
+      mat(p(i,sp), p(i,sp)) -= 1
+    end do
+  end if
+end 
+
+
+subroutine count_d2(mat, p, sp)
+  use bitmasks
+  implicit none
+
+  integer, intent(inout) :: mat(mo_tot_num, mo_tot_num)
+  integer, intent(in) :: p(0:4, 2), sp
+  integer :: i,j
+
+  if(sp == 3) then
+    do i=1,p(0,1)
+      do j=1,p(0,2)
+        mat(p(i,1), p(j,2)) += 1
+      end do
+    end do
+  else
+    do i=1,p(0, sp)
+      do j=1,i-1
+        mat(p(j,sp), p(i,sp)) += 1
+        mat(p(i,sp), p(j,sp)) += 1
+      end do
+    end do
+  end if
 end 
 
 

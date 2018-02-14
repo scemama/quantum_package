@@ -44,7 +44,7 @@ subroutine ZMQ_mrcc(E, mrcc, delta, delta_s2, relative_error)
 
   w = 0.d0
   w = 1.d0
-  call update_psi_average_norm_contrib(w)
+  !call update_psi_average_norm_contrib(w)
 
   
   
