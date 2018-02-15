@@ -497,7 +497,7 @@ def create_ninja_and_rc(l_installed):
         'export LIBRARY_PATH=$(qp_prepend_export "LIBRARY_PATH" "${QP_ROOT}"/lib:"${QP_ROOT}"/lib64)',
         'export C_INCLUDE_PATH=$(qp_prepend_export "C_INCLUDE_PATH" "${QP_ROOT}"/include)',
         '',
-        'if [[ $SHELL == "bash" ]] ; then',
+        'if [[ $SHELL == "/bin/bash" ]] ; then',
         '  source ${QP_ROOT}/install/EZFIO/Bash/ezfio.sh',
         'fi',
         '',
