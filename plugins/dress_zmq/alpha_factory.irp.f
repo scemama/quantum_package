@@ -2,33 +2,6 @@ use bitmasks
 
 
 
-subroutine get_mask_phase(det, phasemask)
-  use bitmasks
-  implicit none
-  
-  integer(bit_kind), intent(in)  :: det(N_int, 2)
-  integer, intent(out)        :: phasemask(2,N_int*bit_kind_size)
-  integer                        :: s, ni, i
-  logical                        :: change
-  
-  phasemask = 0_1
-  do s=1,2
-    change = .false.
-    do ni=1,N_int
-      do i=0,bit_kind_size-1
-        if(BTEST(det(ni, s), i)) then
-          change = .not. change
-        endif
-        if(change) then
-          phasemask(s, ishft(ni-1,bit_kind_shift) + i + 1) = 1_1
-        endif
-      end do
-    end do
-  end do
-end subroutine
-
-
-
 subroutine alpha_callback(delta_ij_loc, i_generator, subset)
   use bitmasks
   implicit none
@@ -65,17 +38,17 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
   integer(bit_kind), allocatable :: minilist(:, :, :), fullminilist(:, :, :)
   logical, allocatable           :: banned(:,:,:), bannedOrb(:,:)
   integer, allocatable           :: counted(:,:), countedOrb(:,:)
-  integer ::                      countedGlob
+  integer ::                      countedGlob, siz, lsiz
 
-  double precision, allocatable   :: mat(:,:,:)
+  integer, allocatable   :: indexes_end(:,:), indexes(:,:)
   
   logical :: monoAdo, monoBdo
   integer :: maskInd
 
   integer(bit_kind), allocatable:: preinteresting_det(:,:,:)
-  integer(bit_kind),allocatable :: abuf(:,:,:)
+  integer ,allocatable :: abuf(:), labuf(:)
   
-  allocate(abuf(N_int, 2, mo_tot_num**2))
+  allocate(abuf(N_det*6), labuf(N_det))
   allocate(preinteresting_det(N_int,2,N_det))
   
   PROVIDE fragment_count
@@ -164,7 +137,7 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
     negMask(i,1) = not(psi_det_generators(i,1,i_generator))
     negMask(i,2) = not(psi_det_generators(i,2,i_generator))
   end do
-  
+  if(psi_det_generators(1,1,i_generator) /= psi_det_sorted(1,1,i_generator)) stop "gen <> sorted"
   do k=1,nmax
     i = indices(k)
     mobMask(1,1) = iand(negMask(1,1), psi_det_sorted(1,1,i))
@@ -195,7 +168,8 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
   allocate(minilist(N_int, 2, N_det_selectors), fullminilist(N_int, 2, N_det))
   allocate(banned(mo_tot_num, mo_tot_num,2), bannedOrb(mo_tot_num, 2))
   allocate(counted(mo_tot_num, mo_tot_num), countedOrb(mo_tot_num, 2))
-  allocate (mat(N_states, mo_tot_num, mo_tot_num))
+  allocate (indexes(0:mo_tot_num, 0:mo_tot_num))
+  allocate (indexes_end(0:mo_tot_num, 0:mo_tot_num))
   maskInd = -1
   integer :: nb_count
   do s1=1,2
@@ -354,8 +328,21 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
             if(fullMatch) cycle
           
             call count_pq(mask, sp, minilist, i_generator, interesting(0), bannedOrb, banned, countedGlob, countedOrb, counted, interesting)
-            call splash_pq(mask, sp, minilist, i_generator, interesting(0), bannedOrb, banned, countedGlob, countedOrb, counted, interesting)
-            !call create_alpha_buffer(i_generator, sp, h1, h2, bannedOrb, banned, abuf, n)
+            call create_indexes(countedGlob, countedOrb, counted, indexes, siz)
+            indexes_end = indexes
+
+            
+            if(siz > size(abuf)) stop "buffer too small in alpha_factory"
+            abuf = 0
+            call splash_pq(mask, sp, minilist, i_generator, interesting(0), bannedOrb, banned, indexes_end, abuf, interesting)
+            indexes_end(:,:) -= 1
+            do i=1,siz
+              if(abuf(i) < 1 .or. abuf(i) > N_det) stop "foireous abuf"
+            end do
+            !print *, "IND1", indexes(1,:)
+            !print *, "IND2", indexes_end(1,:)
+            !stop
+            call alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexes, indexes_end, abuf, siz)
             
             !call dress_with_alpha_buffer(delta_ij_loc, minilist, interesting(0), abuf, n)
           end if
@@ -367,6 +354,119 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
 end subroutine
 
 
+subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexes, indexes_end, abuf, siz)
+  use bitmasks
+  implicit none
+
+  double precision,intent(inout) :: delta_ij_loc(N_states,N_det,2) 
+  integer, intent(in) :: sp, indexes(0:mo_tot_num, 0:mo_tot_num), siz
+  integer, intent(in) :: indexes_end(0:mo_tot_num, 0:mo_tot_num), abuf(*)
+  logical, intent(in) :: bannedOrb(mo_tot_num,2), banned(mo_tot_num, mo_tot_num)
+  integer(bit_kind), intent(in) :: mask(N_int, 2)
+  integer(bit_kind) :: alpha(N_int, 2, 1)
+  integer, allocatable :: labuf(:)
+  logical :: ok
+  integer :: i,j,s,st1,st2,st3,st4
+  integer :: lindex(mo_tot_num,2), lindex_end(mo_tot_num, 2)
+  integer :: s1, s2, stamo
+
+  allocate(labuf(N_det))
+  st1 = indexes_end(0,0)
+  if(st1 > 0) labuf(:st1) = abuf(:st1)
+  st1 += 1
+
+  if(sp == 3) then
+    s1 = 1
+    s2 = 2
+    lindex(:, 1) = indexes(1:,0)
+    lindex_end(:,1) = indexes_end(1:,0)
+    lindex(:, 2) = indexes(0, 1:)
+    lindex_end(:, 2) = indexes_end(0, 1:)
+  else if(sp == 2) then
+    s1 = 2
+    s2 = 2
+    !lindex(:, 1) = indexes(0, 1:)
+    !lindex_end(:,1) = indexes_end(0, 1:)
+    lindex(:, 2) = indexes(0, 1:)
+    lindex_end(:, 2) = indexes_end(0, 1:)
+  else if(sp == 1) then
+    s1 = 1
+    s2 = 1
+    lindex(:, 1) = indexes(1:, 0)
+    lindex_end(:,1) = indexes_end(1:, 0)
+    !lindex(:, 2) = indexes(1:, 0)
+    !lindex_end(:, 2) = indexes_end(1:, 0)
+  end if
+
+    do i=1,mo_tot_num
+      if(bannedOrb(i,s1)) cycle
+      if(lindex(i,s1) /= 0) then
+        st2 = st1 + 1 + lindex_end(i,s1)-lindex(i,s1)
+        labuf(st1:st2-1) = abuf(lindex(i,s1):lindex_end(i,s1))
+      else
+        st2 = st1
+      end if
+      
+      if(sp == 3) then
+        stamo = 1
+      else
+        stamo = i+1
+      end if
+
+      do j=stamo,mo_tot_num
+        if(bannedOrb(j,s2) .or. banned(i,j)) cycle
+        if(lindex(j,s2) /= 0) then
+          st3 = st2 + 1 + lindex_end(j,s2)-lindex(j,s2)
+          labuf(st2:st3-1) = abuf(lindex(j,s2):lindex_end(j,s2))
+        else
+          st3 = st2
+        end if
+
+        if(indexes(i,j) /= 0) then
+          st4 = st3 + 1 + indexes_end(i,j)-indexes(i,j)
+          labuf(st3:st4-1) = abuf(indexes(i,j):indexes_end(i,j))
+        else
+          st4 = st3
+        end if
+        !APPLY PART
+        if(st4 > 1) then
+          call apply_particles(mask, s1, i, s2, j, alpha(1,1,1), ok, N_int)
+          if(.not. ok) stop "non existing alpha......"
+          !print *, "willcall", st4-1, size(labuf)
+          call dress_with_alpha_buffer(delta_ij_loc, labuf, st4-1, alpha, 1)
+          !call dress_with_alpha_buffer(delta_ij_loc, abuf, siz, alpha, 1)
+        end if
+      end do
+    end do
+end subroutine
+
+
+subroutine create_indexes(countedGlob, countedOrb, counted, indexes, siz)
+  use bitmasks
+  implicit none
+
+  integer, intent(in) :: countedGlob, countedOrb(mo_tot_num,2), counted(mo_tot_num, mo_tot_num)
+  integer, intent(out) :: indexes(0:mo_tot_num, 0:mo_tot_num), siz
+  integer :: tmp, i, j
+
+  indexes(0, 0) = countedGlob
+  indexes(0, 1:) = countedOrb(:, 2)
+  indexes(1:, 0) = countedOrb(:, 1)
+  indexes(1:, 1:) = counted(:,:)
+  
+  siz = 1
+
+  do i=0, mo_tot_num
+  do j=0, mo_tot_num
+    if(indexes(i,j) == 0) cycle
+    tmp = indexes(i,j)
+    indexes(i,j) = siz
+    siz += tmp
+  end do
+  end do
+
+  siz -= 1
+end subroutine
 
 
 subroutine count_pq(mask, sp, det, i_gen, N_sel, bannedOrb, banned, countedGlob, countedOrb, counted, interesting)
@@ -484,29 +584,11 @@ subroutine count_pq(mask, sp, det, i_gen, N_sel, bannedOrb, banned, countedGlob,
   if(sp /= 3) then
     countedOrb(:, mod(sp, 2)+1) = 0
   end if
-
-  ! USELESS? 
-  !do j=1,2
-  !  do i=1,mo_tot_num
-  !    if(bannedOrb(i, j)) then
-  !      countedOrb(i, j) = 0
-  !      if(sp == 3 .and. j == 1) then
-  !        counted(i, :) = 0
-   !     else if(sp == 3 .and. j == 2) then
-  !        counted(:, i) = 0
-  !      else if(j == sp) then
-  !        counted(i,:) = 0
-  !        counted(:,i) = 0
-  !      end if
-  !    end if
-  !  end do
-  !end do
 end 
 
 
 
-!subroutine splash_pq(mask, sp, det, i_gen, N_sel, bannedOrb, banned, mat, interesting)
-subroutine splash_pq(mask, sp, det, i_gen, N_sel, bannedOrb, banned, countedGlob, countedOrb, counted, interesting)
+subroutine splash_pq(mask, sp, det, i_gen, N_sel, bannedOrb, banned, indexes, abuf, interesting)
   use bitmasks
   implicit none
   
@@ -514,14 +596,12 @@ subroutine splash_pq(mask, sp, det, i_gen, N_sel, bannedOrb, banned, countedGlob
   integer, intent(in)            :: interesting(0:N_sel)
   integer(bit_kind),intent(in)   :: mask(N_int, 2), det(N_int, 2, N_sel)
   logical, intent(inout)         :: bannedOrb(mo_tot_num, 2), banned(mo_tot_num, mo_tot_num, 2)
-  integer, intent(inout)         :: countedGlob, countedOrb(mo_tot_num, 2), counted(mo_tot_num, mo_tot_num)
-  integer :: counted2(mo_tot_num, mo_tot_num), countedOrb2(mo_tot_num, 2)
+  integer, intent(inout)         :: indexes(0:mo_tot_num, 0:mo_tot_num)
+  integer, intent(inout) :: abuf(*)
   integer                        :: i, ii, j, k, l, h(0:2,2), p(0:4,2), nt, s
   integer(bit_kind)              :: perMask(N_int, 2), mobMask(N_int, 2), negMask(N_int, 2)
   integer :: phasemask(2,N_int*bit_kind_size)
   
-  counted2 = counted
-  countedOrb2 = countedOrb
   PROVIDE psi_selectors_coef_transp
   do i=1,N_int
     negMask(i,1) = not(mask(i,1))
@@ -565,62 +645,33 @@ subroutine splash_pq(mask, sp, det, i_gen, N_sel, bannedOrb, banned, countedGlob
     call bitstring_to_list_in_selection(perMask(1,2), h(1,2), h(0,2), N_int)
 
     if (interesting(i) >= i_gen) then
-        !call get_mask_phase(psi_det_sorted(1,1,interesting(i)), phasemask)
-        if(nt == 4) then
-          call get_d2(det(1,1,i), phasemask, bannedOrb, banned, counted, mask, h, p, sp, psi_selectors_coef_transp(1, interesting(i)))
-        else if(nt == 3) then
-          call get_d1(det(1,1,i), phasemask, bannedOrb, banned, counted, countedOrb, mask, h, p, sp, psi_selectors_coef_transp(1, interesting(i)))
-        else
-          countedGlob -= 1
-          !call get_d0(det(1,1,i), phasemask, bannedOrb, banned, mat, mask, h, p, sp, psi_selectors_coef_transp(1, interesting(i)))
-        end if
-    !else 
-    !    if(nt == 4) call past_d2(banned, p, sp)
-    !    if(nt == 3) call past_d1(bannedOrb, p)
+       if(nt == 4) then
+         call get_d2(interesting(i), det(1,1,i), banned, bannedOrb, indexes, abuf, mask, h, p, sp)
+       else if(nt == 3) then
+         call get_d1(interesting(i), det(1,1,i), banned, bannedOrb, indexes, abuf, mask, h, p, sp)
+       else
+         if(abuf(indexes(0,0)) /= 0) stop "noz"
+         abuf(indexes(0,0)) = interesting(i)
+         indexes(0,0) += 1
+       end if
     end if
-  end do
-  
-  if(countedGlob /= 0) stop "nonul glob"
-  
-  do s=1,2
-  do i=1,mo_tot_num
-    if(countedOrb(i, s) /= 0) then
-      print *, "COUNTEDORB", sp, s, bannedOrb(i,s), countedOrb2(i, s), countedOrb(i, s)
-      !stop "COUNERe"
-    end if
-  end do
-  end do
-
-  do i=1,mo_tot_num
-  do j=1,mo_tot_num
-    if(counted2(i,j) /= 0) then
-      if(counted(i,j) /= 0) then
-        print *, counted(i,j)
-        stop "nonul"
-      end if
-    else
-      if(counted(i,j) /= 0) then
-        print *, counted2(i,j), counted(i,j)
-        stop "UNCOUNTED"
-      end if
-    end if
-  end do
   end do
 end subroutine 
 
 
-subroutine get_d2(gen, phasemask, bannedOrb, banned, counted, mask, h, p, sp, coefs)
+subroutine get_d2(i_gen, gen, banned, bannedOrb, indexes, abuf, mask, h, p, sp)
   use bitmasks
   implicit none
 
   integer(bit_kind), intent(in) :: mask(N_int, 2), gen(N_int, 2)
-  integer, intent(in) :: phasemask(2,N_int*bit_kind_size)
+  integer, intent(inout) :: abuf(*)
+  integer, intent(in) :: i_gen
   logical, intent(in) :: bannedOrb(mo_tot_num, 2), banned(mo_tot_num, mo_tot_num,2)
-  double precision, intent(in) :: coefs(N_states)
-  integer, intent(inout) :: counted(mo_tot_num, mo_tot_num)
+  integer, intent(inout) :: indexes(0:mo_tot_num, 0:mo_tot_num)
   integer, intent(in) :: h(0:2,2), p(0:4,2), sp
   
-  double precision, external :: get_phase_bi, mo_bielec_integral
+  !double precision, external :: get_phase_bi
+  double precision, external :: mo_bielec_integral
   
   integer :: i, j, tip, ma, mi, puti, putj
   integer :: h1, h2, p1, p2, i1, i2
@@ -631,6 +682,7 @@ subroutine get_d2(gen, phasemask, bannedOrb, banned, counted, mask, h, p, sp, co
   integer, parameter :: turn3(2,3) = reshape((/2,3,  1,3, 1,2/), (/2,3/))
   
   integer :: bant
+  integer :: phasemask(2,N_int*bit_kind_size)
   bant = 1
 
   tip = p(0,1) * p(0,2)
@@ -655,11 +707,15 @@ subroutine get_d2(gen, phasemask, bannedOrb, banned, counted, mask, h, p, sp, co
         h1 = h(1, ma)
         h2 = h(2, ma)
         
-        hij = (mo_bielec_integral(p1, p2, h1, h2) - mo_bielec_integral(p2,p1, h1, h2)) * get_phase_bi(phasemask, ma, ma, h1, p1, h2, p2)
+        !hij = (mo_bielec_integral(p1, p2, h1, h2) - mo_bielec_integral(p2,p1, h1, h2)) * get_phase_bi(phasemask, ma, ma, h1, p1, h2, p2)
         if(ma == 1) then
-          counted(putj, puti) -= 1!coefs(:) * hij
+          if(abuf(indexes(putj,puti)) /= 0) stop "noz"
+          abuf(indexes(putj, puti)) = i_gen
+          indexes(putj, puti) += 1
         else
-          counted(puti, putj) -= 1!coefs(:) * hij
+          if(abuf(indexes(puti,putj)) /= 0) stop "noz"
+          abuf(indexes(puti, putj)) = i_gen
+          indexes(puti, putj) += 1
         end if
       end do
     else
@@ -674,8 +730,11 @@ subroutine get_d2(gen, phasemask, bannedOrb, banned, counted, mask, h, p, sp, co
           if(banned(puti,putj,bant)) cycle
           p1 = p(turn2(i), 1)
           
-          hij = mo_bielec_integral(p1, p2, h1, h2) * get_phase_bi(phasemask, 1, 2, h1, p1, h2, p2)
-          counted(puti, putj) -= 1!coefs(:) * hij
+          !hij = mo_bielec_integral(p1, p2, h1, h2) * get_phase_bi(phasemask, 1, 2, h1, p1, h2, p2)
+          
+          if(abuf(indexes(puti,putj)) /= 0) stop "noz"
+          abuf(indexes(puti, putj)) = i_gen
+          indexes(puti, putj) += 1
         end do
       end do
     end if
@@ -694,8 +753,10 @@ subroutine get_d2(gen, phasemask, bannedOrb, banned, counted, mask, h, p, sp, co
         i2 = turn2d(2, i, j)
         p1 = p(i1, ma)
         p2 = p(i2, ma)
-        hij = (mo_bielec_integral(p1, p2, h1, h2) - mo_bielec_integral(p2,p1, h1, h2)) * get_phase_bi(phasemask, ma, ma, h1, p1, h2, p2)
-        counted(puti, putj) -= 1!coefs(:) * hij
+        !hij = (mo_bielec_integral(p1, p2, h1, h2) - mo_bielec_integral(p2,p1, h1, h2)) * get_phase_bi(phasemask, ma, ma, h1, p1, h2, p2)
+        if(abuf(indexes(puti,putj)) /= 0) stop "noz"
+        abuf(indexes(puti, putj)) = i_gen
+        indexes(puti, putj) += 1
       end do
       end do
     else if(tip == 3) then
@@ -708,8 +769,10 @@ subroutine get_d2(gen, phasemask, bannedOrb, banned, counted, mask, h, p, sp, co
         if(banned(puti,putj,1)) cycle
         p2 = p(i, ma)
         
-        hij = mo_bielec_integral(p1, p2, h1, h2) * get_phase_bi(phasemask, mi, ma, h1, p1, h2, p2)
-        counted(min(puti, putj), max(puti, putj)) -= 1!coefs(:) * hij
+        !hij = mo_bielec_integral(p1, p2, h1, h2) * get_phase_bi(phasemask, mi, ma, h1, p1, h2, p2)
+        if(abuf(indexes(  min(puti, putj), max(puti, putj)) ) /= 0) stop "noz"
+        abuf(indexes(min(puti, putj), max(puti, putj))) = i_gen
+        indexes(min(puti, putj), max(puti, putj)) += 1
       end do
     else ! tip == 4
       puti = p(1, sp)
@@ -719,28 +782,31 @@ subroutine get_d2(gen, phasemask, bannedOrb, banned, counted, mask, h, p, sp, co
         p2 = p(2, mi)
         h1 = h(1, mi)
         h2 = h(2, mi)
-        hij = (mo_bielec_integral(p1, p2, h1, h2) - mo_bielec_integral(p2,p1, h1, h2)) * get_phase_bi(phasemask, mi, mi, h1, p1, h2, p2)
-        counted(puti, putj) -= 1!coefs(:) * hij
+        !hij = (mo_bielec_integral(p1, p2, h1, h2) - mo_bielec_integral(p2,p1, h1, h2)) * get_phase_bi(phasemask, mi, mi, h1, p1, h2, p2)
+        
+        if(abuf(indexes(puti,putj)) /= 0) stop "noz"
+        abuf(indexes(puti, putj)) = i_gen
+        indexes(puti, putj) += 1
       end if
     end if
   end if
 end 
 
 
-subroutine get_d1(gen, phasemask, bannedOrb, banned, counted, countedOrb, mask, h, p, sp, coefs)
+subroutine get_d1(i_gen, gen, banned, bannedOrb, indexes, abuf, mask, h, p, sp)
   use bitmasks
   implicit none
 
   integer(bit_kind), intent(in)  :: mask(N_int, 2), gen(N_int, 2)
-  integer,intent(in)          :: phasemask(2,N_int*bit_kind_size)
+  integer, intent(inout) :: abuf(*)
+  integer,intent(in)             :: i_gen
   logical, intent(in)            :: bannedOrb(mo_tot_num, 2), banned(mo_tot_num, mo_tot_num,2)
   integer(bit_kind)              :: det(N_int, 2)
-  double precision, intent(in)   :: coefs(N_states)
-  integer, intent(inout) :: counted(mo_tot_num, mo_tot_num)
-  integer, intent(inout) :: countedOrb(mo_tot_num, 2)
+  integer, intent(inout)         :: indexes(0:mo_tot_num, 0:mo_tot_num)
   integer, intent(in)            :: h(0:2,2), p(0:4,2), sp
   double precision               :: hij, tmp_row(N_states, mo_tot_num), tmp_row2(N_states, mo_tot_num)
-  double precision, external     :: get_phase_bi, mo_bielec_integral
+  !double precision, external     :: get_phase_bi
+  double precision, external     :: mo_bielec_integral
   logical                        :: ok
 
   logical, allocatable           :: lbanned(:,:)
@@ -751,6 +817,7 @@ subroutine get_d1(gen, phasemask, bannedOrb, banned, counted, countedOrb, mask, 
   integer, parameter             :: turn3(2,3) = reshape((/2,3,  1,3, 1,2/), (/2,3/))
   
   integer                        :: bant
+  integer :: phasemask(2,N_int*bit_kind_size)
   
   
   allocate (lbanned(mo_tot_num, 2))
@@ -777,24 +844,30 @@ subroutine get_d1(gen, phasemask, bannedOrb, banned, counted, countedOrb, mask, 
     p1 = p(1,ma)
     p2 = p(2,ma)
     if(.not. bannedOrb(puti, mi)) then
-      tmp_row = 0d0
-      do putj=1, hfix-1
-        if(lbanned(putj, ma) .or. banned(putj, puti,bant)) cycle
-        hij = (mo_bielec_integral(p1, p2, putj, hfix)-mo_bielec_integral(p2,p1,putj,hfix)) * get_phase_bi(phasemask, ma, ma, putj, p1, hfix, p2)
-        tmp_row(1:N_states,putj) += hij * coefs(1:N_states)
-      end do
-      do putj=hfix+1, mo_tot_num
-        if(lbanned(putj, ma) .or. banned(putj, puti,bant)) cycle
-        hij = (mo_bielec_integral(p1, p2, hfix, putj)-mo_bielec_integral(p2,p1,hfix,putj)) * get_phase_bi(phasemask, ma, ma, hfix, p1, putj, p2)
-        tmp_row(1:N_states,putj) += hij * coefs(1:N_states)
-      end do
+      !tmp_row = 0d0
+      !do putj=1, hfix-1
+      !  if(lbanned(putj, ma) .or. banned(putj, puti,bant)) cycle
+      !  hij = (mo_bielec_integral(p1, p2, putj, hfix)-mo_bielec_integral(p2,p1,putj,hfix)) * get_phase_bi(phasemask, ma, ma, putj, p1, hfix, p2)
+      !  tmp_row(1:N_states,putj) += hij * coefs(1:N_states)
+      !end do
+      !do putj=hfix+1, mo_tot_num
+      !  if(lbanned(putj, ma) .or. banned(putj, puti,bant)) cycle
+      !  hij = (mo_bielec_integral(p1, p2, hfix, putj)-mo_bielec_integral(p2,p1,hfix,putj)) * get_phase_bi(phasemask, ma, ma, hfix, p1, putj, p2)
+      !  tmp_row(1:N_states,putj) += hij * coefs(1:N_states)
+      !end do
 
       if(ma == 1) then           
         !mat(1:N_states,1:mo_tot_num,puti) += tmp_row(1:N_states,1:mo_tot_num)
-        countedOrb(puti, 2) -= 1
+        if(abuf(indexes(0,puti)) /= 0) stop "noz"
+        abuf(indexes(0, puti)) = i_gen
+        indexes(0, puti) += 1
+        !countedOrb(puti, 2) -= 1
       else
         !mat(1:N_states,puti,1:mo_tot_num) += tmp_row(1:N_states,1:mo_tot_num)
-        countedOrb(puti, 1) -= 1
+        if(abuf(indexes(puti,0)) /= 0) stop "noz"
+        abuf(indexes(puti, 0)) = i_gen
+        indexes(puti, 0) += 1
+        !countedOrb(puti, 1) -= 1
       end if
     end if
 
@@ -806,28 +879,40 @@ subroutine get_d1(gen, phasemask, bannedOrb, banned, counted, countedOrb, mask, 
       if(lbanned(puti,mi)) cycle
       !p1 fixed
       putj = p1
-      if(.not. banned(putj,puti,bant)) then
-        hij = mo_bielec_integral(p2,pfix,hfix,puti) * get_phase_bi(phasemask, ma, mi, hfix, p2, puti, pfix)
-        tmp_row(:,puti) += hij * coefs(:)
-      end if
+      !if(.not. banned(putj,puti,bant)) then
+      !  hij = mo_bielec_integral(p2,pfix,hfix,puti) * get_phase_bi(phasemask, ma, mi, hfix, p2, puti, pfix)
+      !  tmp_row(:,puti) += hij * coefs(:)
+      !end if
       
       putj = p2
-      if(.not. banned(putj,puti,bant)) then
-        hij = mo_bielec_integral(p1,pfix,hfix,puti) * get_phase_bi(phasemask, ma, mi, hfix, p1, puti, pfix)
-        tmp_row2(:,puti) += hij * coefs(:)
-      end if
+      !if(.not. banned(putj,puti,bant)) then
+      !  hij = mo_bielec_integral(p1,pfix,hfix,puti) * get_phase_bi(phasemask, ma, mi, hfix, p1, puti, pfix)
+      !  tmp_row2(:,puti) += hij * coefs(:)
+      !end if
     end do
     
     if(mi == 1) then
-      !mat(:,:,p1) += tmp_row(:,:)
-      if(.not. bannedOrb(p1, 2)) countedOrb(p1, 2) = countedOrb(p1,2) - 1
-      !mat(:,:,p2) += tmp_row2(:,:)
-      if(.not. bannedOrb(p2, 2)) countedOrb(p2, 2) =  countedOrb(p2,2)-1
+      if(.not. bannedOrb(p1, 2)) then
+        if(abuf(indexes(0,p1)) /= 0) stop "noz"
+        abuf(indexes(0,p1)) = i_gen
+        indexes(0,p1) += 1
+      end if
+      if(.not. bannedOrb(p2, 2)) then
+        if(abuf(indexes(0,p2)) /= 0) stop "noz"
+        abuf(indexes(0,p2)) = i_gen
+        indexes(0,p2) += 1
+      end if
     else
-      !mat(:,p1,:) += tmp_row(:,:)
-      if(.not. bannedOrb(p1, 1)) countedOrb(p1, 1) =  countedOrb(p1,1)-1
-      !mat(:,p2,:) += tmp_row2(:,:)
-      if(.not. bannedOrb(p2, 1)) countedOrb(p2, 1) =  countedOrb(p2,1)-1
+      if(.not. bannedOrb(p1, 1)) then
+        if(abuf(indexes(p1,0)) /= 0) stop "noz"
+        abuf(indexes(p1,0)) = i_gen
+        indexes(p1,0) += 1
+      end if
+      if(.not. bannedOrb(p2, 1)) then
+        if(abuf(indexes(p2,0)) /= 0) stop "noz"
+        abuf(indexes(p2,0)) = i_gen
+        indexes(p2,0) += 1
+      end if
     end if
   else
     if(p(0,ma) == 3) then
@@ -836,22 +921,30 @@ subroutine get_d1(gen, phasemask, bannedOrb, banned, counted, countedOrb, mask, 
         puti = p(i, ma)
         p1 = p(turn3(1,i), ma)
         p2 = p(turn3(2,i), ma)
-        tmp_row = 0d0
-        do putj=1,hfix-1
-          if(lbanned(putj,ma) .or. banned(puti,putj,1)) cycle
-          hij = (mo_bielec_integral(p1, p2, putj, hfix)-mo_bielec_integral(p2,p1,putj,hfix)) * get_phase_bi(phasemask, ma, ma, putj, p1, hfix, p2)
-          tmp_row(:,putj) += hij * coefs(:)
-        end do
-        do putj=hfix+1,mo_tot_num
-          if(lbanned(putj,ma) .or. banned(puti,putj,1)) cycle
-          hij = (mo_bielec_integral(p1, p2, hfix, putj)-mo_bielec_integral(p2,p1,hfix,putj)) * get_phase_bi(phasemask, ma, ma, hfix, p1, putj, p2)
-          tmp_row(:,putj) += hij * coefs(:)
-        end do
+        !tmp_row = 0d0
+        !do putj=1,hfix-1
+        !  if(lbanned(putj,ma) .or. banned(puti,putj,1)) cycle
+        !  hij = (mo_bielec_integral(p1, p2, putj, hfix)-mo_bielec_integral(p2,p1,putj,hfix)) * get_phase_bi(phasemask, ma, ma, putj, p1, hfix, p2)
+        !  tmp_row(:,putj) += hij * coefs(:)
+        !end do
+        !do putj=hfix+1,mo_tot_num
+        !  if(lbanned(putj,ma) .or. banned(puti,putj,1)) cycle
+        !  hij = (mo_bielec_integral(p1, p2, hfix, putj)-mo_bielec_integral(p2,p1,hfix,putj)) * get_phase_bi(phasemask, ma, ma, hfix, p1, putj, p2)
+        !  tmp_row(:,putj) += hij * coefs(:)
+        !end do
 
         !mat(:, :puti-1, puti) += tmp_row(:,:puti-1)
         !mat(:, puti, puti:) += tmp_row(:,puti:)
         if(.not. bannedOrb(puti, sp)) then
-          countedOrb(puti, sp) -= 1
+          if(sp == 1) then
+            if(abuf(indexes(puti,0)) /= 0) stop "noz"
+            abuf(indexes(puti, 0)) = i_gen
+            indexes(puti, 0) += 1
+          else
+            if(abuf(indexes(0,puti)) /= 0) stop "noz"
+            abuf(indexes(0, puti)) = i_gen
+            indexes(0, puti) += 1
+          end if
         end if
       end do
     else
@@ -864,26 +957,38 @@ subroutine get_d1(gen, phasemask, bannedOrb, banned, counted, countedOrb, mask, 
       do puti=1,mo_tot_num
         if(lbanned(puti,ma)) cycle
         putj = p2
-        if(.not. banned(puti,putj,1)) then
-          hij = mo_bielec_integral(pfix, p1, hfix, puti) * get_phase_bi(phasemask, mi, ma, hfix, pfix, puti, p1)
-          tmp_row(:,puti) += hij * coefs(:)
-        end if
+        !if(.not. banned(puti,putj,1)) then
+        !  hij = mo_bielec_integral(pfix, p1, hfix, puti) * get_phase_bi(phasemask, mi, ma, hfix, pfix, puti, p1)
+        !  tmp_row(:,puti) += hij * coefs(:)
+        !end if
         
         putj = p1
-        if(.not. banned(puti,putj,1)) then
-          hij = mo_bielec_integral(pfix, p2, hfix, puti) * get_phase_bi(phasemask, mi, ma, hfix, pfix, puti, p2)
-          tmp_row2(:,puti) += hij * coefs(:)
-        end if
+        !if(.not. banned(puti,putj,1)) then
+        !  hij = mo_bielec_integral(pfix, p2, hfix, puti) * get_phase_bi(phasemask, mi, ma, hfix, pfix, puti, p2)
+        !  tmp_row2(:,puti) += hij * coefs(:)
+        !end if
       end do
-      !mat(:,:p2-1,p2) += tmp_row(:,:p2-1)
-      !mat(:,p2,p2:) += tmp_row(:,p2:)
       if(.not. bannedOrb(p2, sp)) then
-        countedOrb(p2, sp) -= 1
+        if(sp == 1) then
+          if(abuf(indexes(p2,0)) /= 0) stop "noz"
+          abuf(indexes(p2, 0)) = i_gen
+          indexes(p2, 0) += 1
+        else
+          if(abuf(indexes(0,p2)) /= 0) stop "noz"
+          abuf(indexes(0, p2)) = i_gen
+          indexes(0, p2) += 1
+        end if
       end if
-      !mat(:,:p1-1,p1) += tmp_row2(:,:p1-1)
-      !mat(:,p1,p1:) += tmp_row2(:,p1:)
       if(.not. bannedOrb(p1, sp)) then
-        countedOrb(p1, sp) -= 1
+        if(sp == 1) then
+          if(abuf(indexes(p1,0)) /= 0) stop "noz"
+          abuf(indexes(p1, 0)) = i_gen
+          indexes(p1, 0) += 1
+        else
+          if(abuf(indexes(0,p1)) /= 0) stop "noz"
+          abuf(indexes(0, p1)) = i_gen
+          indexes(0, p1) += 1
+        end if
       end if
     end if
   end if
@@ -912,66 +1017,6 @@ subroutine get_d1(gen, phasemask, bannedOrb, banned, counted, countedOrb, mask, 
     end do
 end 
 
-
-subroutine get_d0(gen, phasemask, bannedOrb, banned, mat, mask, h, p, sp, coefs)
-  use bitmasks
-  implicit none
-
-  integer(bit_kind), intent(in) :: gen(N_int, 2), mask(N_int, 2)
-  integer, intent(in) :: phasemask(2,N_int*bit_kind_size)
-  logical, intent(in) :: bannedOrb(mo_tot_num, 2), banned(mo_tot_num, mo_tot_num,2)
-  integer(bit_kind) :: det(N_int, 2)
-  double precision, intent(in) :: coefs(N_states)
-  double precision, intent(inout) :: mat(N_states, mo_tot_num, mo_tot_num)
-  integer, intent(in) :: h(0:2,2), p(0:4,2), sp
-  
-  integer :: i, j, s, h1, h2, p1, p2, puti, putj
-  double precision :: hij, phase
-  double precision, external :: get_phase_bi, mo_bielec_integral
-  logical :: ok
-  
-  integer :: bant
-  bant = 1
-  
-
-  if(sp == 3) then ! AB
-    h1 = p(1,1)
-    h2 = p(1,2)
-    do p1=1, mo_tot_num
-      if(bannedOrb(p1, 1)) cycle
-      do p2=1, mo_tot_num
-        if(bannedOrb(p2,2)) cycle
-        if(banned(p1, p2, bant)) cycle ! rentable?
-        if(p1 == h1 .or. p2 == h2) then
-          call apply_particles(mask, 1,p1,2,p2, det, ok, N_int)
-          call i_h_j(gen, det, N_int, hij)
-        else
-          phase = get_phase_bi(phasemask, 1, 2, h1, p1, h2, p2)
-          hij = mo_bielec_integral(p1, p2, h1, h2) * phase
-        end if
-        mat(:, p1, p2) += coefs(:) * hij
-      end do
-    end do
-  else ! AA BB
-    p1 = p(1,sp)
-    p2 = p(2,sp)
-    do puti=1, mo_tot_num
-      if(bannedOrb(puti, sp)) cycle
-      do putj=puti+1, mo_tot_num
-        if(bannedOrb(putj, sp)) cycle
-        if(banned(puti, putj, bant)) cycle ! rentable?
-        if(puti == p1 .or. putj == p2 .or. puti == p2 .or. putj == p1) then
-          call apply_particles(mask, sp,puti,sp,putj, det, ok, N_int)
-          call i_h_j(gen, det, N_int, hij)
-        else
-          hij = (mo_bielec_integral(p1, p2, puti, putj) -  mo_bielec_integral(p2, p1, puti, putj))* get_phase_bi(phasemask, sp, sp, puti, p1 , putj, p2)
-        end if
-        mat(:, puti, putj) += coefs(:) * hij
-      end do
-    end do
-  end if
-end 
- 
 
 subroutine past_d1(bannedOrb, p)
   use bitmasks
@@ -1006,7 +1051,6 @@ subroutine past_d2(banned, p, sp)
   else
     do i=1,p(0, sp)
       do j=1,i-1
-        if(p(j,sp) > p(i,sp)) stop "PPPPPPPP"
         banned(p(j,sp), p(i,sp)) = .true.
         banned(p(i,sp), p(j,sp)) = .true.
       end do
@@ -1049,7 +1093,6 @@ subroutine count_d2(counted, p, sp)
     do i=1,p(0, sp)
       do j=1,i-1
         counted(p(j,sp), p(i,sp)) += 1
-        !counted(p(i,sp), p(j,sp)) += 1
       end do
     end do
   end if
@@ -1129,64 +1172,4 @@ subroutine bitstring_to_list_in_selection( string, list, n_elements, Nint)
   
 end
 
-
-
-subroutine create_alpha_buffer(i_generator, sp, h1, h2, bannedOrb, banned, abuf, n)
-  use bitmasks
-  implicit none
-  
-  integer, intent(in) :: i_generator, sp, h1, h2
-  logical, intent(in) :: bannedOrb(mo_tot_num, 2), banned(mo_tot_num, mo_tot_num)
-  integer(bit_kind),intent(inout) :: abuf(N_int, 2, *) ! mo_tot_num**2
-  integer, intent(out) :: n
-  logical :: ok
-  integer :: s1, s2, p1, p2, ib, j, istate
-  integer(bit_kind) :: mask(N_int, 2), det(N_int, 2)
-  
-  n = 0
-  
-  if(sp == 3) then
-    s1 = 1
-    s2 = 2
-  else
-    s1 = sp
-    s2 = sp
-  end if
-  
-  call apply_holes(psi_det_generators(1,1,i_generator), s1, h1, s2, h2, mask, ok, N_int)
-  
-  do p1=1,mo_tot_num
-    if(bannedOrb(p1, s1)) cycle
-    ib = 1
-    if(sp /= 3) ib = p1+1
-    do p2=ib,mo_tot_num
-      if(bannedOrb(p2, s2)) cycle
-      if(banned(p1,p2)) cycle
-      n += 1
-      call apply_particles(mask, s1, p1, s2, p2, abuf(1,1,n), ok, N_int)
-      if(.not. ok) stop "error in create_alpha_buffer"
-    end do
-  end do
-end 
-
-
-double precision function get_phase_bi(phasemask, s1, s2, h1, p1, h2, p2)
-  use bitmasks
-  implicit none
-
-  integer, intent(in) :: phasemask(2,*)
-  integer, intent(in) :: s1, s2, h1, h2, p1, p2
-  logical :: change
-  integer :: np1
-  integer :: np
-  double precision, save :: res(0:1) = (/1d0, -1d0/)
-
-  np1 = phasemask(s1,h1) + phasemask(s1,p1) + phasemask(s2,h2) + phasemask(s2,p2)
-  np = np1
-  if(p1 < h1) np = np + 1
-  if(p2 < h2) np = np + 1
-  
-  if(s1 == s2 .and. max(h1, p1) > min(h2, p2)) np = np + 1
-  get_phase_bi = res(iand(np,1))
-end 
 
