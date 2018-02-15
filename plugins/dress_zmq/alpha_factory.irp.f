@@ -366,11 +366,14 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
   integer(bit_kind) :: alpha(N_int, 2, 1)
   integer, allocatable :: labuf(:)
   logical :: ok
-  integer :: i,j,s,st1,st2,st3,st4
+  integer :: i,j,k,s,st1,st2,st3,st4
   integer :: lindex(mo_tot_num,2), lindex_end(mo_tot_num, 2)
   integer :: s1, s2, stamo
+  logical,allocatable :: putten(:)
 
-  allocate(labuf(N_det))
+  allocate(labuf(N_det), putten(N_det))
+  putten = .false.
+
   st1 = indexes_end(0,0)
   if(st1 > 0) labuf(:st1) = abuf(:st1)
   st1 += 1
@@ -403,6 +406,9 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
       if(lindex(i,s1) /= 0) then
         st2 = st1 + 1 + lindex_end(i,s1)-lindex(i,s1)
         labuf(st1:st2-1) = abuf(lindex(i,s1):lindex_end(i,s1))
+        do j=st1,st2-1
+          putten(labuf(j)) = .true.
+        end do
       else
         st2 = st1
       end if
@@ -416,8 +422,15 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
       do j=stamo,mo_tot_num
         if(bannedOrb(j,s2) .or. banned(i,j)) cycle
         if(lindex(j,s2) /= 0) then
-          st3 = st2 + 1 + lindex_end(j,s2)-lindex(j,s2)
-          labuf(st2:st3-1) = abuf(lindex(j,s2):lindex_end(j,s2))
+          st3 = st2
+          do k=lindex(j,s2), lindex_end(j,s2)
+            if(.not. putten(abuf(k))) then
+              labuf(st3) = abuf(k)
+              st3 += 1
+            end if
+          end do
+          !st3 = st2 + 1 + lindex_end(j,s2)-lindex(j,s2)
+          !labuf(st2:st3-1) = abuf(lindex(j,s2):lindex_end(j,s2))
         else
           st3 = st2
         end if
@@ -437,6 +450,13 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
           !call dress_with_alpha_buffer(delta_ij_loc, abuf, siz, alpha, 1)
         end if
       end do
+      
+      if(lindex(i,s1) /= 0) then
+        do j=st1,st2-1
+          putten(labuf(j)) = .false.
+        end do
+      end if
+
     end do
 end subroutine
 
