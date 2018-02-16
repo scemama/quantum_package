@@ -193,7 +193,15 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
 
   pullLoop : do while (loop)
     call pull_dress_results(zmq_socket_pull, ind, delta_loc, task_id)
-    dress_mwen(:) = 0d0 !!!!!!!! A CALCULER ICI
+    dress_mwen(:) = 0d0 
+    
+    !!!!! A VERIFIER !!!!!
+    do i_state=1,N_states
+    do i=1, N_det
+      dress_mwen(i_state) += delta_loc(i_state, i, 1) * psi_coef(i, i_state)
+    end do
+    end do
+      
     dress_detail(:, ind) += dress_mwen(:)
     do j=1,N_cp !! optimizable
       if(cps(ind, j) > 0d0) then

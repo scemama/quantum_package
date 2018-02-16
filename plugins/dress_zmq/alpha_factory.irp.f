@@ -363,7 +363,7 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
   integer, intent(in) :: indexes_end(0:mo_tot_num, 0:mo_tot_num), abuf(*)
   logical, intent(in) :: bannedOrb(mo_tot_num,2), banned(mo_tot_num, mo_tot_num)
   integer(bit_kind), intent(in) :: mask(N_int, 2)
-  integer(bit_kind) :: alpha(N_int, 2, 1)
+  integer(bit_kind) :: alpha(N_int, 2)
   integer, allocatable :: labuf(:)
   logical :: ok
   integer :: i,j,k,s,st1,st2,st3,st4
@@ -388,8 +388,6 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
   else if(sp == 2) then
     s1 = 2
     s2 = 2
-    !lindex(:, 1) = indexes(0, 1:)
-    !lindex_end(:,1) = indexes_end(0, 1:)
     lindex(:, 2) = indexes(0, 1:)
     lindex_end(:, 2) = indexes_end(0, 1:)
   else if(sp == 1) then
@@ -397,8 +395,6 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
     s2 = 1
     lindex(:, 1) = indexes(1:, 0)
     lindex_end(:,1) = indexes_end(1:, 0)
-    !lindex(:, 2) = indexes(1:, 0)
-    !lindex_end(:, 2) = indexes_end(1:, 0)
   end if
 
     do i=1,mo_tot_num
@@ -443,10 +439,10 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
         end if
         !APPLY PART
         if(st4 > 1) then
-          call apply_particles(mask, s1, i, s2, j, alpha(1,1,1), ok, N_int)
-          if(.not. ok) stop "non existing alpha......"
+          call apply_particles(mask, s1, i, s2, j, alpha, ok, N_int)
+          !if(.not. ok) stop "non existing alpha......"
           !print *, "willcall", st4-1, size(labuf)
-          call dress_with_alpha_buffer(delta_ij_loc, labuf, st4-1, alpha, 1)
+          call dress_with_alpha_buffer(delta_ij_loc, labuf, st4-1, alpha)
           !call dress_with_alpha_buffer(delta_ij_loc, abuf, siz, alpha, 1)
         end if
       end do
@@ -670,7 +666,6 @@ subroutine splash_pq(mask, sp, det, i_gen, N_sel, bannedOrb, banned, indexes, ab
        else if(nt == 3) then
          call get_d1(interesting(i), det(1,1,i), banned, bannedOrb, indexes, abuf, mask, h, p, sp)
        else
-         if(abuf(indexes(0,0)) /= 0) stop "noz"
          abuf(indexes(0,0)) = interesting(i)
          indexes(0,0) += 1
        end if
@@ -720,39 +715,36 @@ subroutine get_d2(i_gen, gen, banned, bannedOrb, indexes, abuf, mask, h, p, sp)
       do i = 1, 3
         putj = p(i, ma)
         if(banned(putj,puti,bant)) cycle
-        i1 = turn3(1,i)
-        i2 = turn3(2,i)
-        p1 = p(i1, ma)
-        p2 = p(i2, ma)
-        h1 = h(1, ma)
-        h2 = h(2, ma)
+        !i1 = turn3(1,i)
+        !i2 = turn3(2,i)
+        !p1 = p(i1, ma)
+        !p2 = p(i2, ma)
+        !h1 = h(1, ma)
+        !h2 = h(2, ma)
         
         !hij = (mo_bielec_integral(p1, p2, h1, h2) - mo_bielec_integral(p2,p1, h1, h2)) * get_phase_bi(phasemask, ma, ma, h1, p1, h2, p2)
         if(ma == 1) then
-          if(abuf(indexes(putj,puti)) /= 0) stop "noz"
           abuf(indexes(putj, puti)) = i_gen
           indexes(putj, puti) += 1
         else
-          if(abuf(indexes(puti,putj)) /= 0) stop "noz"
           abuf(indexes(puti, putj)) = i_gen
           indexes(puti, putj) += 1
         end if
       end do
     else
-      h1 = h(1,1)
-      h2 = h(1,2)
+      !h1 = h(1,1)
+      !h2 = h(1,2)
       do j = 1,2
         putj = p(j, 2)
-        p2 = p(turn2(j), 2)
+        !p2 = p(turn2(j), 2)
         do i = 1,2
           puti = p(i, 1)
           
           if(banned(puti,putj,bant)) cycle
-          p1 = p(turn2(i), 1)
+          !p1 = p(turn2(i), 1)
           
           !hij = mo_bielec_integral(p1, p2, h1, h2) * get_phase_bi(phasemask, 1, 2, h1, p1, h2, p2)
           
-          if(abuf(indexes(puti,putj)) /= 0) stop "noz"
           abuf(indexes(puti, putj)) = i_gen
           indexes(puti, putj) += 1
         end do
@@ -761,36 +753,34 @@ subroutine get_d2(i_gen, gen, banned, bannedOrb, indexes, abuf, mask, h, p, sp)
 
   else
     if(tip == 0) then
-      h1 = h(1, ma)
-      h2 = h(2, ma)
+      !h1 = h(1, ma)
+      !h2 = h(2, ma)
       do i=1,3
       puti = p(i, ma)
       do j=i+1,4
         putj = p(j, ma)
         if(banned(puti,putj,1)) cycle
         
-        i1 = turn2d(1, i, j)
-        i2 = turn2d(2, i, j)
-        p1 = p(i1, ma)
-        p2 = p(i2, ma)
+        !i1 = turn2d(1, i, j)
+        !i2 = turn2d(2, i, j)
+        !p1 = p(i1, ma)
+        !p2 = p(i2, ma)
         !hij = (mo_bielec_integral(p1, p2, h1, h2) - mo_bielec_integral(p2,p1, h1, h2)) * get_phase_bi(phasemask, ma, ma, h1, p1, h2, p2)
-        if(abuf(indexes(puti,putj)) /= 0) stop "noz"
         abuf(indexes(puti, putj)) = i_gen
         indexes(puti, putj) += 1
       end do
       end do
     else if(tip == 3) then
-      h1 = h(1, mi)
-      h2 = h(1, ma)
-      p1 = p(1, mi)
+      !h1 = h(1, mi)
+      !h2 = h(1, ma)
+      !p1 = p(1, mi)
       do i=1,3
         puti = p(turn3(1,i), ma)
         putj = p(turn3(2,i), ma)
         if(banned(puti,putj,1)) cycle
-        p2 = p(i, ma)
+        !p2 = p(i, ma)
         
         !hij = mo_bielec_integral(p1, p2, h1, h2) * get_phase_bi(phasemask, mi, ma, h1, p1, h2, p2)
-        if(abuf(indexes(  min(puti, putj), max(puti, putj)) ) /= 0) stop "noz"
         abuf(indexes(min(puti, putj), max(puti, putj))) = i_gen
         indexes(min(puti, putj), max(puti, putj)) += 1
       end do
@@ -798,13 +788,12 @@ subroutine get_d2(i_gen, gen, banned, bannedOrb, indexes, abuf, mask, h, p, sp)
       puti = p(1, sp)
       putj = p(2, sp)
       if(.not. banned(puti,putj,1)) then
-        p1 = p(1, mi)
-        p2 = p(2, mi)
-        h1 = h(1, mi)
-        h2 = h(2, mi)
+        !p1 = p(1, mi)
+        !p2 = p(2, mi)
+        !h1 = h(1, mi)
+        !h2 = h(2, mi)
         !hij = (mo_bielec_integral(p1, p2, h1, h2) - mo_bielec_integral(p2,p1, h1, h2)) * get_phase_bi(phasemask, mi, mi, h1, p1, h2, p2)
         
-        if(abuf(indexes(puti,putj)) /= 0) stop "noz"
         abuf(indexes(puti, putj)) = i_gen
         indexes(puti, putj) += 1
       end if
@@ -818,7 +807,7 @@ subroutine get_d1(i_gen, gen, banned, bannedOrb, indexes, abuf, mask, h, p, sp)
   implicit none
 
   integer(bit_kind), intent(in)  :: mask(N_int, 2), gen(N_int, 2)
-  integer, intent(inout) :: abuf(*)
+  integer, intent(inout)         :: abuf(*)
   integer,intent(in)             :: i_gen
   logical, intent(in)            :: bannedOrb(mo_tot_num, 2), banned(mo_tot_num, mo_tot_num,2)
   integer(bit_kind)              :: det(N_int, 2)
@@ -878,13 +867,11 @@ subroutine get_d1(i_gen, gen, banned, bannedOrb, indexes, abuf, mask, h, p, sp)
 
       if(ma == 1) then           
         !mat(1:N_states,1:mo_tot_num,puti) += tmp_row(1:N_states,1:mo_tot_num)
-        if(abuf(indexes(0,puti)) /= 0) stop "noz"
         abuf(indexes(0, puti)) = i_gen
         indexes(0, puti) += 1
         !countedOrb(puti, 2) -= 1
       else
         !mat(1:N_states,puti,1:mo_tot_num) += tmp_row(1:N_states,1:mo_tot_num)
-        if(abuf(indexes(puti,0)) /= 0) stop "noz"
         abuf(indexes(puti, 0)) = i_gen
         indexes(puti, 0) += 1
         !countedOrb(puti, 1) -= 1
@@ -892,44 +879,40 @@ subroutine get_d1(i_gen, gen, banned, bannedOrb, indexes, abuf, mask, h, p, sp)
     end if
 
     !MOVE MI
-    pfix = p(1,mi)
-    tmp_row = 0d0
-    tmp_row2 = 0d0
-    do puti=1,mo_tot_num
-      if(lbanned(puti,mi)) cycle
+    !pfix = p(1,mi)
+    !tmp_row = 0d0
+    !tmp_row2 = 0d0
+    !do puti=1,mo_tot_num
+    !  if(lbanned(puti,mi)) cycle
       !p1 fixed
-      putj = p1
+    !  putj = p1
       !if(.not. banned(putj,puti,bant)) then
       !  hij = mo_bielec_integral(p2,pfix,hfix,puti) * get_phase_bi(phasemask, ma, mi, hfix, p2, puti, pfix)
       !  tmp_row(:,puti) += hij * coefs(:)
       !end if
       
-      putj = p2
+    !  putj = p2
       !if(.not. banned(putj,puti,bant)) then
       !  hij = mo_bielec_integral(p1,pfix,hfix,puti) * get_phase_bi(phasemask, ma, mi, hfix, p1, puti, pfix)
       !  tmp_row2(:,puti) += hij * coefs(:)
       !end if
-    end do
+    !end do
     
     if(mi == 1) then
       if(.not. bannedOrb(p1, 2)) then
-        if(abuf(indexes(0,p1)) /= 0) stop "noz"
         abuf(indexes(0,p1)) = i_gen
         indexes(0,p1) += 1
       end if
       if(.not. bannedOrb(p2, 2)) then
-        if(abuf(indexes(0,p2)) /= 0) stop "noz"
         abuf(indexes(0,p2)) = i_gen
         indexes(0,p2) += 1
       end if
     else
       if(.not. bannedOrb(p1, 1)) then
-        if(abuf(indexes(p1,0)) /= 0) stop "noz"
         abuf(indexes(p1,0)) = i_gen
         indexes(p1,0) += 1
       end if
       if(.not. bannedOrb(p2, 1)) then
-        if(abuf(indexes(p2,0)) /= 0) stop "noz"
         abuf(indexes(p2,0)) = i_gen
         indexes(p2,0) += 1
       end if
@@ -937,10 +920,10 @@ subroutine get_d1(i_gen, gen, banned, bannedOrb, indexes, abuf, mask, h, p, sp)
   else
     if(p(0,ma) == 3) then
       do i=1,3
-        hfix = h(1,ma)
+        !hfix = h(1,ma)
         puti = p(i, ma)
-        p1 = p(turn3(1,i), ma)
-        p2 = p(turn3(2,i), ma)
+        !p1 = p(turn3(1,i), ma)
+        !p2 = p(turn3(2,i), ma)
         !tmp_row = 0d0
         !do putj=1,hfix-1
         !  if(lbanned(putj,ma) .or. banned(puti,putj,1)) cycle
@@ -957,55 +940,49 @@ subroutine get_d1(i_gen, gen, banned, bannedOrb, indexes, abuf, mask, h, p, sp)
         !mat(:, puti, puti:) += tmp_row(:,puti:)
         if(.not. bannedOrb(puti, sp)) then
           if(sp == 1) then
-            if(abuf(indexes(puti,0)) /= 0) stop "noz"
             abuf(indexes(puti, 0)) = i_gen
             indexes(puti, 0) += 1
           else
-            if(abuf(indexes(0,puti)) /= 0) stop "noz"
             abuf(indexes(0, puti)) = i_gen
             indexes(0, puti) += 1
           end if
         end if
       end do
     else
-      hfix = h(1,mi)
-      pfix = p(1,mi)
+      !hfix = h(1,mi)
+      !pfix = p(1,mi)
       p1 = p(1,ma)
       p2 = p(2,ma)
-      tmp_row = 0d0
-      tmp_row2 = 0d0
-      do puti=1,mo_tot_num
-        if(lbanned(puti,ma)) cycle
-        putj = p2
+      !tmp_row = 0d0
+      !tmp_row2 = 0d0
+      !do puti=1,mo_tot_num
+      !  if(lbanned(puti,ma)) cycle
+      !  putj = p2
         !if(.not. banned(puti,putj,1)) then
         !  hij = mo_bielec_integral(pfix, p1, hfix, puti) * get_phase_bi(phasemask, mi, ma, hfix, pfix, puti, p1)
         !  tmp_row(:,puti) += hij * coefs(:)
         !end if
         
-        putj = p1
+      !  putj = p1
         !if(.not. banned(puti,putj,1)) then
         !  hij = mo_bielec_integral(pfix, p2, hfix, puti) * get_phase_bi(phasemask, mi, ma, hfix, pfix, puti, p2)
         !  tmp_row2(:,puti) += hij * coefs(:)
         !end if
-      end do
+      !end do
       if(.not. bannedOrb(p2, sp)) then
         if(sp == 1) then
-          if(abuf(indexes(p2,0)) /= 0) stop "noz"
           abuf(indexes(p2, 0)) = i_gen
           indexes(p2, 0) += 1
         else
-          if(abuf(indexes(0,p2)) /= 0) stop "noz"
           abuf(indexes(0, p2)) = i_gen
           indexes(0, p2) += 1
         end if
       end if
       if(.not. bannedOrb(p1, sp)) then
         if(sp == 1) then
-          if(abuf(indexes(p1,0)) /= 0) stop "noz"
           abuf(indexes(p1, 0)) = i_gen
           indexes(p1, 0) += 1
         else
-          if(abuf(indexes(0,p1)) /= 0) stop "noz"
           abuf(indexes(0, p1)) = i_gen
           indexes(0, p1) += 1
         end if
@@ -1014,27 +991,27 @@ subroutine get_d1(i_gen, gen, banned, bannedOrb, indexes, abuf, mask, h, p, sp)
   end if
 
  !! MONO
-    if(sp == 3) then
-      s1 = 1
-      s2 = 2
-    else
-      s1 = sp
-      s2 = sp
-    end if
-
-    do i1=1,p(0,s1)
-      ib = 1
-      if(s1 == s2) ib = i1+1
-      do i2=ib,p(0,s2)
-        p1 = p(i1,s1)
-        p2 = p(i2,s2)
-        if(bannedOrb(p1, s1) .or. bannedOrb(p2, s2) .or. banned(p1, p2, 1)) cycle
-        call apply_particles(mask, s1, p1, s2, p2, det, ok, N_int)
-        call i_h_j(gen, det, N_int, hij)
-        !mat(:, p1, p2) += coefs(:) * hij
-        !!!!!!!! DUPLICTATE counted(p1, p2) !!!!!!!!!!!!!!!!!!!!
-      end do
-    end do
+  !  if(sp == 3) then
+  !    s1 = 1
+  !    s2 = 2
+  !  else
+  !    s1 = sp
+  !    s2 = sp
+  !  end if
+!
+!    do i1=1,p(0,s1)
+!      ib = 1
+!      if(s1 == s2) ib = i1+1
+!      do i2=ib,p(0,s2)
+!        p1 = p(i1,s1)
+!        p2 = p(i2,s2)
+ !       if(bannedOrb(p1, s1) .or. bannedOrb(p2, s2) .or. banned(p1, p2, 1)) cycle
+ !       call apply_particles(mask, s1, p1, s2, p2, det, ok, N_int)
+!        call i_h_j(gen, det, N_int, hij)
+!        !mat(:, p1, p2) += coefs(:) * hij
+!        !!!!!!!! DUPLICTATE counted(p1, p2) !!!!!!!!!!!!!!!!!!!!
+!      end do
+!    end do
 end 
 
 
