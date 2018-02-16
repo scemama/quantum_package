@@ -242,8 +242,8 @@ subroutine davidson_diag_hjj_sjj(dets_in,u_in,H_jj,s2_out,energies,dim_in,sze,N_
       
       if (dressing_state > 0) then
 
+        l = dressed_column_idx(dressing_state)
         do istate=1,N_st_diag
-          l = dressed_column_idx(dressing_state)
           do i=1,sze
               W(i,shift+istate) += dressing_column_h(i,dressing_state) * U(l,shift+istate)
               S(i,shift+istate) += dressing_column_s(i,dressing_state) * U(l,shift+istate)

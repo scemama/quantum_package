@@ -97,7 +97,7 @@ subroutine run_mrcc_slave(thread,iproc,energy)
           n = n - 1
 
           if(n /= 0) then
-            call mrcc_part_dress_1c(delta_ij_loc(1,1,1), delta_ij_loc(1,1,2), &
+            call mrcc_part_dress(delta_ij_loc(1,1,1), delta_ij_loc(1,1,2), &
                   i_generator,n,abuf,N_int,omask,contrib)
           endif
         end do
