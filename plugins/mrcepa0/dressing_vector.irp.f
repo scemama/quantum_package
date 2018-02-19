@@ -24,6 +24,7 @@
    tmp = u_dot_v(dressing_column_s(1,k), psi_coef(1,k), N_det)
    dressing_column_s(l,k) -= tmp * f
  enddo
-
+ print *, "DRESS", dressing_column_h(:10,1)
+! stop
 END_PROVIDER
 

@@ -86,7 +86,7 @@ END_PROVIDER
   else
     errr = 1d-4
   end if
-  relative_error = errr
+  relative_error = errr * 0d0
   print *, "RELATIVE ERROR", relative_error
   call ZMQ_dress(E_CI_before, dress, del, del_s2, abs(relative_error))
   

@@ -69,7 +69,6 @@ subroutine run_mrcc_slave(thread,iproc,energy)
     else
       integer :: i_generator, i_i_generator, subset
       read (task,*) subset, ind
-      print *, "SLAVE RECEIVED", ind
 !      if(buf%N == 0) then
 !        ! Only first time 
 !        call create_selection_buffer(1, 2, buf)

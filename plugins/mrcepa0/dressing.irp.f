@@ -867,6 +867,7 @@ end
   else
     target_error = 1d-4
   end if
+  target_error = 0d0
   call ZMQ_mrcc(E_CI_before, mrcc, delta_ij_mrcc_zmq, delta_ij_s2_mrcc_zmq, abs(target_error))
 
   mrcc_previous_E(:) = mrcc_E0_denominator(:)

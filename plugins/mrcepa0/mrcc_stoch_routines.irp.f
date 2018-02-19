@@ -114,17 +114,17 @@ subroutine ZMQ_mrcc(E, mrcc, delta, delta_s2, relative_error)
         print *,  irp_here, ': Failed in zmq_set_running'
       endif
 
-  !!$OMP PARALLEL DEFAULT(shared) NUM_THREADS(nproc+1)                &
-  !    !$OMP  PRIVATE(i)
-  !i = omp_get_thread_num()
-  !if (i==0) then
-  !  call mrcc_collector(zmq_socket_pull,E, relative_error, delta, delta_s2, mrcc)
+  !$OMP PARALLEL DEFAULT(shared) NUM_THREADS(nproc+1)                &
+      !$OMP  PRIVATE(i)
+  i = omp_get_thread_num()
+  if (i==0) then
+    call mrcc_collector(zmq_socket_pull,E, relative_error, delta, delta_s2, mrcc)
 !
-!  else
-!    call mrcc_slave_inproc(i)
-!  endif
-!  !$OMP END PARALLEL
-  call mrcc_collector(zmq_socket_pull,E, relative_error, delta, delta_s2, mrcc)
+  else
+    call mrcc_slave_inproc(i)
+  endif
+  !$OMP END PARALLEL
+!  call mrcc_collector(zmq_socket_pull,E, relative_error, delta, delta_s2, mrcc)
   call end_parallel_job(zmq_to_qp_run_socket, zmq_socket_pull, 'mrcc')
   
   print *, '========== ================= ================= ================='
