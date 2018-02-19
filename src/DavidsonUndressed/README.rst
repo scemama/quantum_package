@@ -1,8 +1,8 @@
-===============
-UndressedMethod
-===============
+=================
+DavidsonUndressed
+=================
 
-Defines a null dressing vector
+Module for main files with undressed Davidson
 
 Needed Modules
 ==============
