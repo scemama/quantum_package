@@ -54,7 +54,7 @@ subroutine run_dress_slave(thread,iproc,energy)
     if(task_id /= 0) then
       read (task,*) subset, i_generator
       delta_ij_loc = 0d0
-      call alpha_callback(delta_ij_loc, i_generator, subset)
+      call alpha_callback(delta_ij_loc, i_generator, subset, iproc)
 
       !!! SET DRESSING COLUMN?
       !do i=1,N_det

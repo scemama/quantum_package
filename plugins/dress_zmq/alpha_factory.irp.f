@@ -2,11 +2,12 @@ use bitmasks
 
 
 
-subroutine alpha_callback(delta_ij_loc, i_generator, subset)
+subroutine alpha_callback(delta_ij_loc, i_generator, subset,iproc)
   use bitmasks
   implicit none
   integer, intent(in)            :: i_generator, subset
   double precision,intent(inout) :: delta_ij_loc(N_states,N_det,2) 
+  integer, intent(in)            :: iproc
   
   integer :: k,l
 
@@ -14,12 +15,12 @@ subroutine alpha_callback(delta_ij_loc, i_generator, subset)
 
 
   do l=1,N_generators_bitmask
-    call generate_singles_and_doubles(delta_ij_loc, i_generator,l,subset)
+    call generate_singles_and_doubles(delta_ij_loc, i_generator,l,subset,iproc)
   enddo
 end subroutine
 
 
-subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index, subset)
+subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index, subset, iproc)
   use bitmasks
   implicit none
   BEGIN_DOC
@@ -28,6 +29,8 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
   
   double precision,intent(inout) :: delta_ij_loc(N_states,N_det,2) 
   integer, intent(in)            :: i_generator, subset, bitmask_index
+  integer, intent(in)            :: iproc
+
   
   integer                         :: h1,h2,s1,s2,s3,i1,i2,ib,sp,k,i,j,nt,ii,n
   integer(bit_kind)               :: hole(N_int,2), particle(N_int,2), mask(N_int, 2), pmask(N_int, 2)
@@ -356,7 +359,7 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
             !print *, "IND1", indexes(1,:)
             !print *, "IND2", indexes_end(1,:)
             !stop
-            call alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexes, indexes_end, abuf, siz)
+            call alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexes, indexes_end, abuf, siz, iproc)
             
             !call dress_with_alpha_buffer(delta_ij_loc, minilist, interesting(0), abuf, n)
           end if
@@ -368,12 +371,12 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
 end subroutine
 
 
-subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexes, indexes_end, abuf, siz)
+subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexes, indexes_end, abuf, siz, iproc)
   use bitmasks
   implicit none
 
   double precision,intent(inout) :: delta_ij_loc(N_states,N_det,2) 
-  integer, intent(in) :: sp, indexes(0:mo_tot_num, 0:mo_tot_num), siz
+  integer, intent(in) :: sp, indexes(0:mo_tot_num, 0:mo_tot_num), siz, iproc
   integer, intent(in) :: indexes_end(0:mo_tot_num, 0:mo_tot_num), abuf(*)
   logical, intent(in) :: bannedOrb(mo_tot_num,2), banned(mo_tot_num, mo_tot_num)
   integer(bit_kind), intent(in) :: mask(N_int, 2)
@@ -456,7 +459,7 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
           call apply_particles(mask, s1, i, s2, j, alpha, ok, N_int)
           !if(.not. ok) stop "non existing alpha......"
           !print *, "willcall", st4-1, size(labuf)
-          call dress_with_alpha_buffer(delta_ij_loc, labuf, st4-1, alpha)
+          call dress_with_alpha_buffer(delta_ij_loc, labuf, st4-1, alpha, iproc)
           !call dress_with_alpha_buffer(delta_ij_loc, abuf, siz, alpha, 1)
         end if
       end do
