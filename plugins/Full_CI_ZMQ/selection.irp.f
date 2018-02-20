@@ -71,7 +71,6 @@ subroutine select_connected(i_generator,E0,pt2,b,subset)
       hole_mask(k,2) = iand(generators_bitmask(k,2,s_hole,l), psi_det_generators(k,2,i_generator))
       particle_mask(k,1) = iand(generators_bitmask(k,1,s_part,l), not(psi_det_generators(k,1,i_generator)) )
       particle_mask(k,2) = iand(generators_bitmask(k,2,s_part,l), not(psi_det_generators(k,2,i_generator)) )
-
     enddo
     call select_singles_and_doubles(i_generator,hole_mask,particle_mask,fock_diag_tmp,E0,pt2,b,subset)
   enddo
@@ -299,7 +298,8 @@ subroutine select_singles_and_doubles(i_generator,hole_mask,particle_mask,fock_d
     particle(k,1) = iand(not(psi_det_generators(k,1,i_generator)), particle_mask(k,1))
     particle(k,2) = iand(not(psi_det_generators(k,2,i_generator)), particle_mask(k,2))
   enddo
-
+  
+  
   integer                        :: N_holes(2), N_particles(2)
   integer                        :: hole_list(N_int*bit_kind_size,2)
   integer                        :: particle_list(N_int*bit_kind_size,2)

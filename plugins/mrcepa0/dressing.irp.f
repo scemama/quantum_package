@@ -343,7 +343,10 @@ subroutine mrcc_part_dress(delta_ij_, delta_ij_s2_, i_generator,n_selected,det_b
   !double precision, external :: get_dij, get_dij_index
   double precision :: Delta_E_inv(N_states)
   double precision, intent(inout) :: contrib(N_states)
-  double precision :: sdress, hdress
+  double precision :: sdress, hdress, shdress
+  integer :: old_ninc
+
+  old_ninc = ninc
 
   if (perturbative_triples) then
     PROVIDE one_anhil fock_virt_total fock_core_inactive_total one_creat
@@ -408,6 +411,9 @@ subroutine mrcc_part_dress(delta_ij_, delta_ij_s2_, i_generator,n_selected,det_b
       
  
   do i_alpha=1,N_tq
+    old_ninc = ninc
+    shdress = 0d0
+    
     if(key_mask(1,1) /= 0) then
       call getMobiles(tq(1,1,i_alpha), key_mask, mobiles, Nint)
       
@@ -545,6 +551,9 @@ subroutine mrcc_part_dress(delta_ij_, delta_ij_s2_, i_generator,n_selected,det_b
           k_sd = idx_alpha(l_sd)
           hdress = dIa_hla(i_state,k_sd) * psi_ref_coef(i_I,i_state) 
           sdress = dIa_sla(i_state,k_sd) * psi_ref_coef(i_I,i_state) 
+          !!$OMP ATOMIC
+          if(hdress /= 0d0) ninc = ninc + 1
+          shdress += hdress
           !$OMP ATOMIC
           contrib(i_state) += hdress * psi_coef(dressed_column_idx(i_state), i_state) * psi_non_ref_coef(k_sd, i_state)
           !$OMP ATOMIC
@@ -554,7 +563,18 @@ subroutine mrcc_part_dress(delta_ij_, delta_ij_s2_, i_generator,n_selected,det_b
         enddo
       enddo
     enddo
+    if(ninc /= old_ninc) then
+      nalp = nalp + 1
+      !print "(A8,I20,I20,E15.5)", "grepme", tq(1,1,i_alpha), tq(1,2,i_alpha), shdress
+      !if(tq(1,1,i_alpha) == 1007 .and. tq(1,2,i_alpha) == 17301943) then
+      ! print *, "foinder", i_generator
+      ! call debug_det(psi_det_generators(1,1, i_generator), N_int)
+      ! call debug_det(tq(1,1,i_alpha), N_int)
+      ! stop
+     ! end if
+    end if
   enddo
+
   deallocate (dIa_hla,dIa_sla,hij_cache,sij_cache)
   deallocate(miniList, idx_miniList)
 end

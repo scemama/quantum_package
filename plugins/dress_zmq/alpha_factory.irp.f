@@ -31,6 +31,7 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
   
   integer                         :: h1,h2,s1,s2,s3,i1,i2,ib,sp,k,i,j,nt,ii,n
   integer(bit_kind)               :: hole(N_int,2), particle(N_int,2), mask(N_int, 2), pmask(N_int, 2)
+  integer(bit_kind)  :: mmask(N_int, 2)
   logical                         :: fullMatch, ok
   
   integer(bit_kind) :: mobMask(N_int, 2), negMask(N_int, 2)
@@ -58,11 +59,24 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
   monoBdo = .true.
 
   do k=1,N_int
-    hole    (k,1) = iand(psi_det_generators(k,1,i_generator), generators_bitmask(k,1,s_hole,bitmask_index))
-    hole    (k,2) = iand(psi_det_generators(k,2,i_generator), generators_bitmask(k,2,s_hole,bitmask_index))
-    particle(k,1) = iand(not(psi_det_generators(k,1,i_generator)), generators_bitmask(k,1,s_part,bitmask_index))
-    particle(k,2) = iand(not(psi_det_generators(k,2,i_generator)), generators_bitmask(k,2,s_part,bitmask_index))
+    !hole    (k,1) = iand(psi_det_generators(k,1,i_generator), generators_bitmask(k,1,s_hole,bitmask_index))
+    !hole    (k,2) = iand(psi_det_generators(k,2,i_generator), generators_bitmask(k,2,s_hole,bitmask_index))
+    !particle(k,1) = iand(not(psi_det_generators(k,1,i_generator)), generators_bitmask(k,1,s_part,bitmask_index))
+    !particle(k,2) = iand(not(psi_det_generators(k,2,i_generator)), generators_bitmask(k,2,s_part,bitmask_index))
+    hole    (k,1) = iand(psi_det_generators(k,1,i_generator), full_ijkl_bitmask(k))
+    hole    (k,2) = iand(psi_det_generators(k,2,i_generator), full_ijkl_bitmask(k))
+    particle(k,1) = iand(not(psi_det_generators(k,1,i_generator)), full_ijkl_bitmask(k))
+    particle(k,2) = iand(not(psi_det_generators(k,2,i_generator)), full_ijkl_bitmask(k))
+    
   enddo
+  
+  !if(i_generator == 34) then
+  !  call debug_det(psi_det_generators(1,1,34), N_int)
+  !  call debug_det(generators_bitmask(1,1,s_part,bitmask_index), N_int)
+  !  call debug_det(particle, N_int)
+  !  print *, "dddddddddddd"
+  !  stop
+  !end if
 
   integer                        :: N_holes(2), N_particles(2)
   integer                        :: hole_list(N_int*bit_kind_size,2)
@@ -335,10 +349,10 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
             if(siz > size(abuf)) stop "buffer too small in alpha_factory"
             abuf = 0
             call splash_pq(mask, sp, minilist, i_generator, interesting(0), bannedOrb, banned, indexes_end, abuf, interesting)
-            indexes_end(:,:) -= 1
-            do i=1,siz
-              if(abuf(i) < 1 .or. abuf(i) > N_det) stop "foireous abuf"
-            end do
+            !indexes_end(:,:) -= 1
+            !do i=1,siz
+            !  if(abuf(i) < 1 .or. abuf(i) > N_det) stop "foireous abuf"
+            !end do
             !print *, "IND1", indexes(1,:)
             !print *, "IND2", indexes_end(1,:)
             !stop
@@ -374,7 +388,7 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
   allocate(labuf(N_det), putten(N_det))
   putten = .false.
 
-  st1 = indexes_end(0,0)
+  st1 = indexes_end(0,0)-1 !!
   if(st1 > 0) labuf(:st1) = abuf(:st1)
   st1 += 1
 
@@ -382,19 +396,19 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
     s1 = 1
     s2 = 2
     lindex(:, 1) = indexes(1:,0)
-    lindex_end(:,1) = indexes_end(1:,0)
+    lindex_end(:,1) = indexes_end(1:,0)-1
     lindex(:, 2) = indexes(0, 1:)
-    lindex_end(:, 2) = indexes_end(0, 1:)
+    lindex_end(:, 2) = indexes_end(0, 1:)-1
   else if(sp == 2) then
     s1 = 2
     s2 = 2
     lindex(:, 2) = indexes(0, 1:)
-    lindex_end(:, 2) = indexes_end(0, 1:)
+    lindex_end(:, 2) = indexes_end(0, 1:)-1
   else if(sp == 1) then
     s1 = 1
     s2 = 1
     lindex(:, 1) = indexes(1:, 0)
-    lindex_end(:,1) = indexes_end(1:, 0)
+    lindex_end(:,1) = indexes_end(1:, 0)-1
   end if
 
     do i=1,mo_tot_num
@@ -432,8 +446,8 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
         end if
 
         if(indexes(i,j) /= 0) then
-          st4 = st3 + 1 + indexes_end(i,j)-indexes(i,j)
-          labuf(st3:st4-1) = abuf(indexes(i,j):indexes_end(i,j))
+          st4 = st3 + 1 + indexes_end(i,j)-indexes(i,j) -1!!
+          labuf(st3:st4-1) = abuf(indexes(i,j):indexes_end(i,j)-1) !!
         else
           st4 = st3
         end if

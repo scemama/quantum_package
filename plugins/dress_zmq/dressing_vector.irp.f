@@ -1,3 +1,9 @@
+ BEGIN_PROVIDER [ integer, nalp ]
+&BEGIN_PROVIDER [ integer, ninc ]
+   nalp = 0
+   ninc = 0
+ END_PROVIDER
+
  BEGIN_PROVIDER [ double precision, dressing_column_h, (N_det,N_states) ]
 &BEGIN_PROVIDER [ double precision, dressing_column_s, (N_det,N_states) ]
  implicit none
@@ -11,9 +17,6 @@
  double precision :: f, tmp
  double precision, external :: u_dot_v
  
- print *, "DELTA_IJ", delta_ij(1,:10,1)
- print *, "DELTA_IJ div", delta_ij(1,:10,1) / psi_coef(dressed_column_idx(1),1)
- !stop
  do k=1,N_states
    l = dressed_column_idx(k)
    f = 1.d0/psi_coef(l,k)
@@ -27,6 +30,8 @@
    tmp = u_dot_v(dressing_column_s(1,k), psi_coef(1,k), N_det)
    dressing_column_s(l,k) -= tmp * f
  enddo
- !stop
+ print *, "NALP", nalp
+ print *, "NINC", ninc
+ print *, "DELTA_IJ", dressing_column_h(:10,1)
 END_PROVIDER
 

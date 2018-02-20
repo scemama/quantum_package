@@ -4,18 +4,11 @@ program mrcc_sto
   BEGIN_DOC
 ! TODO
   END_DOC
-  print *, "========================"
-  print *, "========================"
-  print *, "========================"
-  print *, "MRCC_STO not implemented - acts as a unittest for dress_zmq"
-  print *, "========================"
-  print *, "========================"
-  print *, "========================"
   call dress_zmq()
 end
 
- BEGIN_PROVIDER [ integer, idx_non_ref_from_sorted, (N_det) ]
-&BEGIN_PROVIDER [ integer, psi_from_sorted, (N_det) ]
+ BEGIN_PROVIDER [ integer, psi_from_sorted, (N_det) ]
+&BEGIN_PROVIDER [ integer, idx_non_ref_from_sorted, (N_det) ]
   implicit none
   integer :: i,inpsisor
   
@@ -30,10 +23,17 @@ end
   end do
 END_PROVIDER
 
+
 subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, n_minilist, alpha)
  use bitmasks
  implicit none
-
+  BEGIN_DOC
+  !delta_ij_loc(:,:,1) : dressing column for H
+  !delta_ij_loc(:,:,2) : dressing column for S2
+  !minilist : indices of determinants connected to alpha ( in psi_det_sorted )
+  !n_minilist : size of minilist
+  !alpha : alpha determinant
+  END_DOC
   integer(bit_kind), intent(in)   :: alpha(N_int,2)
   integer,intent(in)              :: minilist(n_minilist), n_minilist
   double precision, intent(inout) :: delta_ij_loc(N_states,N_det,2)
@@ -49,22 +49,36 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, n_minilist, alpha)
   double precision               :: ci_inv(N_states)
   integer                        :: exc(0:2,2,2)
   integer                        :: h1,h2,p1,p2,s1,s2
-  integer(bit_kind)              :: tmp_det(N_int,2)
+  integer(bit_kind)              :: tmp_det(N_int,2), ctrl
   integer                        :: i_state, k_sd, l_sd, m_sd, ll_sd, i_I
   double precision, allocatable  :: hij_cache(:), sij_cache(:)
   double precision :: Delta_E_inv(N_states)
   double precision :: sdress, hdress
   double precision :: c0(N_states)
-  logical :: ok
+  logical :: ok, ok2
+  integer :: old_ninc
+  double precision :: shdress
   
+
+  if(n_minilist == 1) return
+
+  shdress = 0d0
+  old_ninc = ninc
 
   if (perturbative_triples) then
     PROVIDE one_anhil fock_virt_total fock_core_inactive_total one_creat
   endif
+  
+  do i_I=1,N_det_ref
+    call get_excitation_degree(alpha,psi_ref(1,1,i_I),degree1,N_int)
+    if(degree1 <= 2) return
+  end do
+
   allocate(hij_cache(N_det), sij_cache(N_det)) 
   allocate (dIa_hla(N_states,N_det), dIa_sla(N_states,N_det))
   allocate (idx_alpha(0:n_minilist))
   
+
   do i_state=1,N_states
     c0(i_state) = 1.d0/psi_coef(dressed_column_idx(i_state),i_state)
   enddo
@@ -81,18 +95,31 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, n_minilist, alpha)
         exit
       end if
     end do
+
+    !if(ok) then
+    !  call get_excitation(psi_det_sorted(1,1,k_sd),alpha,exc,degree1,phase,N_int)
+    !  if(degree1 == 0 .or. degree1 > 2) stop "minilist error"
+    !  call decode_exc(exc,degree1,h1,p1,h2,p2,s1,s2)
+    !  
+    !  if(h1 > 10 .or. p1 < 7 .or. p1 == 8 .or. p1 == 9) ok = .false.
+    !  if(ok .and. degree1 == 2) then
+    !    if(h2 > 10 .or. p2 < 7 .or. p2 == 8 .or. p2 == 9) ok = .false.
+    !  end if
+    !  !if(degree1 == 0 .or. degree1 > 2) stop "minilist error"
+    !    !iand(xor(psi_det_sorted(i,2,k_sd), alpha(i,2)), alpha(i,2))
+    !end if
     
-    if( xor(ok, idx_non_ref_from_sorted(k_sd) > 0)) stop "BUGUE"
+    !if( xor(ok, idx_non_ref_from_sorted(k_sd) > 0)) stop "BUGUE"
     if(ok) then
       ll_sd += 1
       idx_alpha(ll_sd) = k_sd
 !     call i_h_j(alpha,psi_non_ref(1,1,idx_alpha(l_sd)),N_int,hij_cache(k_sd))
 !     call get_s2(alpha,psi_non_ref(1,1,idx_alpha(l_sd)),N_int,sij_cache(k_sd))
-     call i_h_j(alpha,psi_det_sorted(1,1,k_sd),N_int,hij_cache(k_sd))
-     call get_s2(alpha,psi_det_sorted(1,1,k_sd),N_int,sij_cache(k_sd))
+      call i_h_j(alpha,psi_det_sorted(1,1,k_sd),N_int,hij_cache(k_sd))
+      call get_s2(alpha,psi_det_sorted(1,1,k_sd),N_int,sij_cache(k_sd))
     end if
   enddo
-  
+  if(ll_sd <= 1) return 
   idx_alpha(0) = ll_sd
   
 
@@ -126,9 +153,12 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, n_minilist, alpha)
       enddo
       call apply_excitation(psi_ref(1,1,i_I), exc, tmp_det, ok, N_int)
       
+      ok2 = .false.
       do i_state=1,N_states
         dIK(i_state) = dij(i_I, idx_non_ref_from_sorted(idx_alpha(k_sd)), i_state)
+        if(dIK(i_state) /= 0d0) ok2 = .true.
       enddo
+      if(.not. ok2) cycle
       
       ! <I| \l/ |alpha>
       do i_state=1,N_states
@@ -174,6 +204,12 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, n_minilist, alpha)
       enddo
     enddo
     
+    ok2 = .false.
+    do i_state=1,N_states
+      if(dIa(i_state) /= 0d0) ok2 = .true.
+    enddo
+    if(.not. ok2) cycle
+
     do i_state=1,N_states
       ci_inv(i_state) = psi_ref_coef_inv(i_I,i_state)
     enddo
@@ -192,9 +228,15 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, n_minilist, alpha)
         !print *, i_state, idx_alpha(l_sd)
         k_sd = idx_alpha(l_sd)
         m_sd = psi_from_sorted(k_sd)
-        if(psi_det(1,1,m_sd) /= psi_det_sorted(1,1,k_sd)) stop "psi_from_sorted foireous"
-        hdress = dIa_hla(i_state,k_sd) * psi_ref_coef(i_I,i_state) * c0(i_state)
-        sdress = dIa_sla(i_state,k_sd) * psi_ref_coef(i_I,i_state) * c0(i_state)
+        hdress = dIa_hla(i_state,k_sd) * psi_ref_coef(i_I,i_state)! * c0(i_state)
+        sdress = dIa_sla(i_state,k_sd) * psi_ref_coef(i_I,i_state)! * c0(i_state)
+        !!$OMP ATOMIC
+        !shdress += 1d0
+        nalp += 1
+        if(hdress /= 0d0) then
+          ninc = ninc + 1
+          !print *, "grepme2", hdress, shdress
+        end if
         !$OMP ATOMIC
         delta_ij_loc(i_state,m_sd,1) += hdress
         !$OMP ATOMIC
@@ -203,6 +245,11 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, n_minilist, alpha)
       enddo
     enddo
   enddo
+
+  !if(ninc /= old_ninc) then
+  !  nalp = nalp + 1
+  !  !print "(A8,I20,I20,E15.5)", "grepme",  alpha(1,1), alpha(1,2), shdress
+  !end if
 end subroutine
 
 
