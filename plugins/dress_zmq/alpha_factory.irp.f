@@ -350,7 +350,7 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
 
             
             if(siz > size(abuf)) stop "buffer too small in alpha_factory"
-            abuf = 0
+            !abuf = 0
             call splash_pq(mask, sp, minilist, i_generator, interesting(0), bannedOrb, banned, indexes_end, abuf, interesting)
             !indexes_end(:,:) -= 1
             !do i=1,siz

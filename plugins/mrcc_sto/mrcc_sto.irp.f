@@ -69,6 +69,10 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, n_minilist, alpha, ip
   
   
   if(n_minilist == 1) return
+  
+  do i=1,n_minilist
+    if(idx_non_ref_from_sorted(minilist(i)) == 0) return
+  end do
 
   shdress = 0d0
   old_ninc = ninc
@@ -77,19 +81,10 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, n_minilist, alpha, ip
     PROVIDE one_anhil fock_virt_total fock_core_inactive_total one_creat
   endif
   
-  do i_I=1,N_det_ref
-    call get_excitation_degree(alpha,psi_ref(1,1,i_I),degree1,N_int)
-    if(degree1 <= 2) return
-  end do
-
-  
-
   ll_sd = 0
   do l_sd=1,n_minilist
     ok = .true.
     k_sd = minilist(l_sd)
-    !if(idx_non_ref_rev(k_sd) == 0) cycle
-    
     !do i_I=1,N_det_ref
     !  call get_excitation_degree(psi_det_sorted(1,1,k_sd),psi_ref(1,1,i_I),degree1,N_int)
     !  if(degree1 == 0) then
@@ -97,7 +92,6 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, n_minilist, alpha, ip
     !    exit
     !  end if
     !end do
-    if(idx_non_ref_from_sorted(k_sd) == 0) ok = .false.
 
    !if(ok) then
    !  call get_excitation(psi_det_sorted(1,1,k_sd),alpha,exc,degree1,phase,N_int)
