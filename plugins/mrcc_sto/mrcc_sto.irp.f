@@ -148,7 +148,6 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, n_minilist, alpha, ip
         dIK(i_state) = dij(i_I, idx_non_ref_from_sorted(idx_alpha_(k_sd,iproc)), i_state)
         if(dIK(i_state) /= 0d0) then
           ok2 = .true.
-          exit
         endif
       enddo
       if(.not. ok2) cycle
