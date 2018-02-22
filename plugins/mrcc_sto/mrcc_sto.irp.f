@@ -34,7 +34,9 @@ END_PROVIDER
 END_DOC
 END_PROVIDER
 
-subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, n_minilist, alpha, iproc)
+
+
+subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, det_minilist, n_minilist, alpha, iproc)
  use bitmasks
  implicit none
   BEGIN_DOC
@@ -44,7 +46,7 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, n_minilist, alpha, ip
   !n_minilist : size of minilist
   !alpha : alpha determinant
   END_DOC
-  integer(bit_kind), intent(in)   :: alpha(N_int,2)
+  integer(bit_kind), intent(in)   :: alpha(N_int,2), det_minilist(N_int, 2, n_minilist)
   integer,intent(in)              :: minilist(n_minilist), n_minilist, iproc
   double precision, intent(inout) :: delta_ij_loc(N_states,N_det,2)
 
@@ -63,10 +65,8 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, n_minilist, alpha, ip
   logical :: ok, ok2
   integer :: old_ninc
   double precision :: shdress
-  
   PROVIDE mo_class
 
-  
   
   if(n_minilist == 1) return
   
