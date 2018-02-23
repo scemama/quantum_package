@@ -20,6 +20,23 @@ subroutine alpha_callback(delta_ij_loc, i_generator, subset,iproc)
 end subroutine
 
 
+ BEGIN_PROVIDER [ integer, psi_from_sorted, (N_det) ]
+&BEGIN_PROVIDER [ integer, idx_non_ref_from_sorted, (N_det) ]
+  implicit none
+  integer :: i,inpsisor
+  
+  idx_non_ref_from_sorted = 0
+  psi_from_sorted = 0
+
+  do i=1,N_det
+    psi_from_sorted(psi_det_sorted_order(i)) = i
+    inpsisor = psi_det_sorted_order(i)
+    if(inpsisor <= 0) stop "idx_non_ref_from_sorted"
+    idx_non_ref_from_sorted(inpsisor) = idx_non_ref_rev(i)
+  end do
+END_PROVIDER
+
+
 subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index, subset, iproc)
   use bitmasks
   implicit none
@@ -371,17 +388,17 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
 end subroutine
 
 
-subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexes, indexes_end, abuf, siz, iproc)
+subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexes, indexes_end, rabuf, siz, iproc)
   use bitmasks
   implicit none
 
   double precision,intent(inout) :: delta_ij_loc(N_states,N_det,2) 
   integer, intent(in) :: sp, indexes(0:mo_tot_num, 0:mo_tot_num), siz, iproc
-  integer, intent(in) :: indexes_end(0:mo_tot_num, 0:mo_tot_num), abuf(*)
+  integer, intent(in) :: indexes_end(0:mo_tot_num, 0:mo_tot_num), rabuf(*)
   logical, intent(in) :: bannedOrb(mo_tot_num,2), banned(mo_tot_num, mo_tot_num)
   integer(bit_kind), intent(in) :: mask(N_int, 2)
   integer(bit_kind) :: alpha(N_int, 2)
-  integer, allocatable :: labuf(:)
+  integer, allocatable :: labuf(:), abuf(:)
   logical :: ok
   integer :: i,j,k,s,st1,st2,st3,st4
   integer :: lindex(mo_tot_num,2), lindex_end(mo_tot_num, 2)
@@ -390,14 +407,19 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
   integer(bit_kind), allocatable :: det_minilist(:,:,:)
 
 
-  allocate(labuf(N_det), putten(N_det), det_minilist(N_int, 2, N_det))
+  allocate(abuf(siz), labuf(N_det), putten(N_det), det_minilist(N_int, 2, N_det))
+  
+  do i=1,siz
+    abuf(i) = psi_from_sorted(rabuf(i))
+  end do
+
   putten = .false.
 
   st1 = indexes_end(0,0)-1 !!
   if(st1 > 0) then
     labuf(:st1) = abuf(:st1)
     do i=1,st1
-      det_minilist(:,:,i) = psi_det_sorted(:,:,labuf(i))
+      det_minilist(:,:,i) = psi_det(:,:,labuf(i))
     end do
   end if
   st1 += 1
@@ -421,66 +443,66 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
     lindex_end(:,1) = indexes_end(1:, 0)-1
   end if
 
-    do i=1,mo_tot_num
-      if(bannedOrb(i,s1)) cycle
-      if(lindex(i,s1) /= 0) then
-        st2 = st1 + 1 + lindex_end(i,s1)-lindex(i,s1)
-        labuf(st1:st2-1) = abuf(lindex(i,s1):lindex_end(i,s1))
-        do j=st1,st2-1
-          putten(labuf(j)) = .true.
-          det_minilist(:,:,j) = psi_det_sorted(:,:,labuf(j))
-        end do
-      else
-        st2 = st1
-      end if
-      
-      if(sp == 3) then
-        stamo = 1
-      else
-        stamo = i+1
-      end if
-
-      do j=stamo,mo_tot_num
-        if(bannedOrb(j,s2) .or. banned(i,j)) cycle
-        if(lindex(j,s2) /= 0) then
-          st3 = st2
-          do k=lindex(j,s2), lindex_end(j,s2)
-            if(.not. putten(abuf(k))) then
-              labuf(st3) = abuf(k)
-              det_minilist(:,:,st3) = psi_det_sorted(:,:,abuf(k))
-              st3 += 1
-            end if
-          end do
-        else
-          st3 = st2
-        end if
-
-        if(indexes(i,j) /= 0) then
-          st4 = st3 + 1 + indexes_end(i,j)-indexes(i,j) -1!!
-          labuf(st3:st4-1) = abuf(indexes(i,j):indexes_end(i,j)-1) !!
-          do k=st3, st4-1
-            det_minilist(:,:,k) = psi_det_sorted(:,:,labuf(k))
-          end do
-        else
-          st4 = st3
-        end if
-        !APPLY PART
-        if(st4 > 1) then
-          call apply_particles(mask, s1, i, s2, j, alpha, ok, N_int)
-          !if(.not. ok) stop "non existing alpha......"
-          !print *, "willcall", st4-1, size(labuf)
-          call dress_with_alpha_buffer(delta_ij_loc, labuf, det_minilist, st4-1, alpha, iproc)
-          !call dress_with_alpha_buffer(delta_ij_loc, abuf, siz, alpha, 1)
-        end if
+  do i=1,mo_tot_num
+    if(bannedOrb(i,s1)) cycle
+    if(lindex(i,s1) /= 0) then
+      st2 = st1 + 1 + lindex_end(i,s1)-lindex(i,s1)
+      labuf(st1:st2-1) = abuf(lindex(i,s1):lindex_end(i,s1))
+      do j=st1,st2-1
+        putten(labuf(j)) = .true.
+        det_minilist(:,:,j) = psi_det(:,:,labuf(j))
       end do
-      
-      if(lindex(i,s1) /= 0) then
-        do j=st1,st2-1
-          putten(labuf(j)) = .false.
+    else
+      st2 = st1
+    end if
+    
+    if(sp == 3) then
+      stamo = 1
+    else
+      stamo = i+1
+    end if
+
+    do j=stamo,mo_tot_num
+      if(bannedOrb(j,s2) .or. banned(i,j)) cycle
+      if(lindex(j,s2) /= 0) then
+        st3 = st2
+        do k=lindex(j,s2), lindex_end(j,s2)
+          if(.not. putten(abuf(k))) then
+            labuf(st3) = abuf(k)
+            det_minilist(:,:,st3) = psi_det(:,:,abuf(k))
+            st3 += 1
+          end if
         end do
+      else
+        st3 = st2
       end if
 
+      if(indexes(i,j) /= 0) then
+        st4 = st3 + 1 + indexes_end(i,j)-indexes(i,j) -1!!
+        labuf(st3:st4-1) = abuf(indexes(i,j):indexes_end(i,j)-1) !!
+        do k=st3, st4-1
+          det_minilist(:,:,k) = psi_det(:,:,labuf(k))
+        end do
+      else
+        st4 = st3
+      end if
+      !APPLY PART
+      if(st4 > 1) then
+        call apply_particles(mask, s1, i, s2, j, alpha, ok, N_int)
+        !if(.not. ok) stop "non existing alpha......"
+        !print *, "willcall", st4-1, size(labuf)
+        call dress_with_alpha_buffer(delta_ij_loc, labuf, det_minilist, st4-1, alpha, iproc)
+        !call dress_with_alpha_buffer(delta_ij_loc, abuf, siz, alpha, 1)
+      end if
     end do
+    
+    if(lindex(i,s1) /= 0) then
+      do j=st1,st2-1
+        putten(labuf(j)) = .false.
+      end do
+    end if
+
+  end do
 end subroutine
 
 
@@ -543,7 +565,6 @@ subroutine count_pq(mask, sp, det, i_gen, N_sel, bannedOrb, banned, countedGlob,
 
     mobMask(1,1) = iand(negMask(1,1), det(1,1,i))
     mobMask(1,2) = iand(negMask(1,2), det(1,2,i))
-    if(interesting(i) < i_gen) cycle
     nt = popcnt(mobMask(1, 1)) + popcnt(mobMask(1, 2))
 
 
@@ -656,11 +677,11 @@ subroutine splash_pq(mask, sp, det, i_gen, N_sel, bannedOrb, banned, indexes, ab
     !if (interesting(i) < 0) then
     !  stop 'prefetch interesting(i)'
     !endif
+    if(interesting(i) < i_gen) cycle
 
     
     mobMask(1,1) = iand(negMask(1,1), det(1,1,i))
     mobMask(1,2) = iand(negMask(1,2), det(1,2,i))
-    if(interesting(i) < i_gen) cycle
     nt = popcnt(mobMask(1, 1)) + popcnt(mobMask(1, 2))
 
     if(nt > 4) cycle
