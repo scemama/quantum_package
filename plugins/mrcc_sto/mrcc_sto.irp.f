@@ -12,7 +12,9 @@ end
 &BEGIN_PROVIDER [ double precision, sij_cache_, (N_det,Nproc) ]
 &BEGIN_PROVIDER [ double precision, dIa_hla_, (N_states,N_det,Nproc) ]
 &BEGIN_PROVIDER [ double precision, dIa_sla_, (N_states,N_det,Nproc) ]
- BEGIN_DOC
+&BEGIN_PROVIDER [ integer, excs_ , (0:2,2,2,N_det,Nproc) ]
+&BEGIN_PROVIDER [ double precision, phases_, (N_det, Nproc) ]
+BEGIN_DOC
  ! temporay arrays for dress_with_alpha_buffer. Avoids realocation.
 END_DOC
 END_PROVIDER
@@ -46,8 +48,7 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, det_minilist, n_minil
   double precision :: Delta_E_inv(N_states)
   double precision :: sdress, hdress
   logical :: ok, ok2
-  integer :: old_ninc
-  double precision :: shdress
+  integer :: canbediamond
   PROVIDE mo_class
 
   
@@ -57,28 +58,33 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, det_minilist, n_minil
     if(idx_non_ref_rev(minilist(i)) == 0) return
   end do
 
-  shdress = 0d0
-  old_ninc = ninc
-
   if (perturbative_triples) then
     PROVIDE one_anhil fock_virt_total fock_core_inactive_total one_creat
   endif
-  
+  canbediamond = 0
   do l_sd=1,n_minilist
-   !call get_excitation(det_minilist(1,1,l_sd),alpha,exc,degree1,phase,N_int)
-   !if(degree1 == 0 .or. degree1 > 2) stop "minilist error"
-   !call decode_exc(exc,degree1,h1,p1,h2,p2,s1,s2)
-   !
-   !ok = (mo_class(h1)(1:1) == 'A' .or. mo_class(h1)(1:1) == 'I') .and. &
-   !     (mo_class(p1)(1:1) == 'A' .or. mo_class(p1)(1:1) == 'V') 
-   !if(ok .and. degree1 == 2) then
-   !        ok = (mo_class(h2)(1:1) == 'A' .or. mo_class(h2)(1:1) == 'I') .and. &
-   !             (mo_class(p2)(1:1) == 'A' .or. mo_class(p2)(1:1) == 'V') 
-   !end if
-    call i_h_j(alpha,det_minilist(1,1,l_sd),N_int,hij_cache_(l_sd,iproc))
-    call get_s2(alpha,det_minilist(1,1,l_sd),N_int,sij_cache_(l_sd,iproc))
+   call get_excitation(det_minilist(1,1,l_sd),alpha,exc,degree1,phase,N_int)
+   call decode_exc(exc,degree1,h1,p1,h2,p2,s1,s2)
+   
+   ok = (mo_class(h1)(1:1) == 'A' .or. mo_class(h1)(1:1) == 'I') .and. &
+        (mo_class(p1)(1:1) == 'A' .or. mo_class(p1)(1:1) == 'V') 
+   if(ok .and. degree1 == 2) then
+           ok = (mo_class(h2)(1:1) == 'A' .or. mo_class(h2)(1:1) == 'I') .and. &
+                (mo_class(p2)(1:1) == 'A' .or. mo_class(p2)(1:1) == 'V') 
+   end if
+   
+   if(ok) then
+     canbediamond += 1
+     excs_(:,:,:,l_sd,iproc) = exc(:,:,:)
+     phases_(l_sd, iproc) = phase
+   else
+     phases_(l_sd, iproc) = 0d0
+   end if
+   !call i_h_j(alpha,det_minilist(1,1,l_sd),N_int,hij_cache_(l_sd,iproc))
+   !call get_s2(alpha,det_minilist(1,1,l_sd),N_int,sij_cache_(l_sd,iproc))
+   call i_h_j_s2(alpha,det_minilist(1,1,l_sd),N_int,hij_cache_(l_sd,iproc), sij_cache_(l_sd,iproc))
   enddo
-  
+  if(canbediamond <= 1) return
 
   do i_I=1,N_det_ref
     call get_excitation_degree(alpha,psi_ref(1,1,i_I),degree1,N_int)
@@ -91,12 +97,16 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, det_minilist, n_minil
     enddo
 
     do k_sd=1,n_minilist
+      if(phases_(k_sd,iproc) == 0d0) cycle
       call get_excitation_degree(psi_ref(1,1,i_I),det_minilist(1,1,k_sd),degree,N_int)
       if (degree > 2) then
         cycle
       endif
       
-      call get_excitation(det_minilist(1,1,k_sd),alpha,exc,degree2,phase,N_int)
+      !call get_excitation(det_minilist(1,1,k_sd),alpha,exc,degree2,phase,N_int)
+      phase = phases_(k_sd, iproc)
+      exc(:,:,:) = excs_(:,:,:,k_sd,iproc)
+      degree2 = exc(0,1,1) + exc(0,1,2)
       call apply_excitation(psi_ref(1,1,i_I), exc, tmp_det, ok, N_int)
       
       if((.not. ok) .and. (.not. perturbative_triples)) cycle
@@ -118,6 +128,7 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, det_minilist, n_minil
       if (ok) then
         phase2 = 0d0
         do l_sd=k_sd+1,n_minilist
+          if(phases_(l_sd, iproc) == 0d0) cycle
           call get_excitation_degree(tmp_det,det_minilist(1,1,l_sd),degree,N_int)
           if (degree == 0) then
             do i_state=1,N_states
@@ -204,11 +215,11 @@ subroutine test_minilist(minilist, n_minilist, alpha)
   refc = 0
   testc = 0
   do i=1,N_det
-    call get_excitation_degree(psi_det_sorted(1,1,i), alpha, deg, N_int) 
+    call get_excitation_degree(psi_det(1,1,i), alpha, deg, N_int) 
     if(deg <= 2) refc(i) = refc(i) + 1
   end do
   do i=1,n_minilist
-    call get_excitation_degree(psi_det_sorted(1,1,minilist(i)), alpha, deg, N_int) 
+    call get_excitation_degree(psi_det(1,1,minilist(i)), alpha, deg, N_int) 
     if(deg <= 2) then
       testc(minilist(i)) += 1
     else

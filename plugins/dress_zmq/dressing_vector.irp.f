@@ -1,8 +1,3 @@
- BEGIN_PROVIDER [ integer, nalp ]
-&BEGIN_PROVIDER [ integer, ninc ]
-   nalp = 0
-   ninc = 0
- END_PROVIDER
 
  BEGIN_PROVIDER [ double precision, dressing_column_h, (N_det,N_states) ]
 &BEGIN_PROVIDER [ double precision, dressing_column_s, (N_det,N_states) ]
@@ -30,8 +25,5 @@
    tmp = u_dot_v(dressing_column_s(1,k), psi_coef(1,k), N_det)
    dressing_column_s(l,k) -= tmp * f
  enddo
- print *, "NALP", nalp
- print *, "NINC", ninc
- print *, "DELTA_IJ", dressing_column_h(:10,1)
 END_PROVIDER
 
