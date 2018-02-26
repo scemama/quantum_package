@@ -44,7 +44,7 @@ subroutine run_mrcc_slave(thread,iproc,energy)
   !,delta_ij_s2_loc(N_states,N_det_non_ref,N_det_ref) &
 
 
-        allocate(abuf(N_int, 2, N_det_non_ref))
+  allocate(abuf(N_int, 2, N_det_non_ref))
 
   allocate(mrcc_detail(N_states, N_det_generators))
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
@@ -69,7 +69,6 @@ subroutine run_mrcc_slave(thread,iproc,energy)
     else
       integer :: i_generator, i_i_generator, subset
       read (task,*) subset, ind
-      
 !      if(buf%N == 0) then
 !        ! Only first time 
 !        call create_selection_buffer(1, 2, buf)

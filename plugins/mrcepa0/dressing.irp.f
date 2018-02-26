@@ -345,6 +345,7 @@ subroutine mrcc_part_dress(delta_ij_, delta_ij_s2_, i_generator,n_selected,det_b
   double precision, intent(inout) :: contrib(N_states)
   double precision :: sdress, hdress
 
+
   if (perturbative_triples) then
     PROVIDE one_anhil fock_virt_total fock_core_inactive_total one_creat
   endif
@@ -545,6 +546,7 @@ subroutine mrcc_part_dress(delta_ij_, delta_ij_s2_, i_generator,n_selected,det_b
           k_sd = idx_alpha(l_sd)
           hdress = dIa_hla(i_state,k_sd) * psi_ref_coef(i_I,i_state) 
           sdress = dIa_sla(i_state,k_sd) * psi_ref_coef(i_I,i_state) 
+          !!$OMP ATOMIC
           !$OMP ATOMIC
           contrib(i_state) += hdress * psi_coef(dressed_column_idx(i_state), i_state) * psi_non_ref_coef(k_sd, i_state)
           !$OMP ATOMIC
@@ -555,6 +557,7 @@ subroutine mrcc_part_dress(delta_ij_, delta_ij_s2_, i_generator,n_selected,det_b
       enddo
     enddo
   enddo
+
   deallocate (dIa_hla,dIa_sla,hij_cache,sij_cache)
   deallocate(miniList, idx_miniList)
 end
@@ -577,8 +580,8 @@ END_PROVIDER
   integer                        :: i,j,k
   
   double precision, allocatable  :: mrcc(:)
-  double precision               :: E_CI_before, relative_error
-  double precision, save :: errr = 0d0
+  double precision               :: E_CI_before!, relative_error
+  double precision, save :: target_error = 0d0
 
   allocate(mrcc(N_states))
 
@@ -590,14 +593,13 @@ END_PROVIDER
   E_CI_before = mrcc_E0_denominator(1) + nuclear_repulsion
   threshold_selectors = 1.d0
   threshold_generators = 1d0 
-  if(errr /= 0d0) then
-    errr = errr / 2d0 ! (-mrcc_E0_denominator(1) + mrcc_previous_E(1)) / 1d1
+  if(target_error /= 0d0) then
+    target_error = target_error / 2d0 ! (-mrcc_E0_denominator(1) + mrcc_previous_E(1)) / 1d1
   else
-    errr = 1d-4
+    target_error = 1d-4
   end if
-  relative_error = errr
-  print *, "RELATIVE ERROR", relative_error
-  call ZMQ_mrcc(E_CI_before, mrcc, delta_ij_mrcc_zmq, delta_ij_s2_mrcc_zmq, abs(relative_error))
+  target_error = 0d0
+  call ZMQ_mrcc(E_CI_before, mrcc, delta_ij_mrcc_zmq, delta_ij_s2_mrcc_zmq, abs(target_error))
 
   mrcc_previous_E(:) = mrcc_E0_denominator(:)
 END_PROVIDER

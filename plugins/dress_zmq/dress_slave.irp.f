@@ -1,9 +1,8 @@
-program mrcc_slave
+subroutine dress_slave
   implicit none
   BEGIN_DOC
-! Helper program to compute the mrcc in distributed mode.
+! Helper program to compute the dress in distributed mode.
   END_DOC
-  print  *, "SLAVE"
   read_wf = .False.
   distributed_davidson = .False.
   SOFT_TOUCH read_wf distributed_davidson
@@ -25,37 +24,29 @@ subroutine run_wf
   double precision :: energy(N_states_diag)
   character*(64) :: states(1)
   integer :: rc, i
- 
- integer, external              :: zmq_get_dvector, zmq_get_N_det_generators 
-  integer, external              :: zmq_get_psi, zmq_get_N_det_selectors
-  integer, external              :: zmq_get_N_states_diag
-       
+  
   call provide_everything
   
   zmq_context = f77_zmq_ctx_new ()
-  states(1) = 'mrcc'
+  states(1) = 'dress'
 
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
 
   do
+
     call wait_for_states(states,zmq_state,1)
-    if(zmq_state(1:7) == 'Stopped') then
+
+    if(trim(zmq_state) == 'Stopped') then
 
       exit
 
-    else if (zmq_state(1:4) == 'mrcc') then
+    else if (trim(zmq_state) == 'dress') then
 
       ! Selection
       ! ---------
 
-      !call wall_time(t0)
-      if (zmq_get_psi(zmq_to_qp_run_socket,1) == -1) cycle
-      if (zmq_get_N_det_generators (zmq_to_qp_run_socket, 1) == -1) cycle
-      if (zmq_get_N_det_selectors(zmq_to_qp_run_socket, 1) == -1) cycle
-      if (zmq_get_dvector(zmq_to_qp_run_socket,1,'energy',energy,N_states) == -1) cycle
-
-      !call wall_time(t1)
-      !call write_double(6,(t1-t0),'Broadcast time')
+      print *,  'dress'
+      call zmq_get_psi(zmq_to_qp_run_socket,1,energy,N_states)
 
       PROVIDE psi_bilinear_matrix_columns_loc psi_det_alpha_unique psi_det_beta_unique
       PROVIDE psi_bilinear_matrix_rows psi_det_sorted_order psi_bilinear_matrix_order
@@ -64,21 +55,21 @@ subroutine run_wf
 
       !$OMP PARALLEL PRIVATE(i)
       i = omp_get_thread_num()
-      call mrcc_slave_tcp(i, energy)
+      call dress_slave_tcp(i, energy)
       !$OMP END PARALLEL
-      print *,  'mrcc done'
+      print *,  'dress done'
 
     endif
 
   end do
 end
 
-subroutine mrcc_slave_tcp(i,energy)
+subroutine dress_slave_tcp(i,energy)
   implicit none
   double precision, intent(in) :: energy(N_states_diag)
   integer, intent(in)            :: i
   logical :: lstop
   lstop = .False.
-  call run_mrcc_slave(0,i,energy,lstop)
+  call run_dress_slave(0,i,energy,lstop)
 end
 
