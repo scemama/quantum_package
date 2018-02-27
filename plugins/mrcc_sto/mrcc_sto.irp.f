@@ -5,6 +5,7 @@ program mrcc_sto
 ! TODO
   END_DOC
   call dress_zmq()
+  call ezfio_set_mrcc_sto_energy(ci_energy_dressed(1))
 end
 
 

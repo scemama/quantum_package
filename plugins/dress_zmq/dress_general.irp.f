@@ -27,7 +27,7 @@ subroutine run(N_st,energy)
     enddo
     SOFT_TOUCH psi_coef ci_energy_dressed
     call write_double(6,ci_energy_dressed(1),"Final dress energy")
-    call ezfio_set_dress_zmq_energy(ci_energy_dressed(1))
+!   call ezfio_set_dress_zmq_energy(ci_energy_dressed(1))
     call save_wavefunction
   else
     E_new = 0.d0
@@ -53,7 +53,7 @@ subroutine run(N_st,energy)
       call write_double(6,delta_E,"delta_E")
       delta_E = dabs(delta_E)
       call save_wavefunction
-      call ezfio_set_dress_zmq_energy(ci_energy_dressed(1))
+!     call ezfio_set_dress_zmq_energy(ci_energy_dressed(1))
       if (iteration >= n_it_dress_max) then
         exit
       endif
@@ -79,7 +79,7 @@ subroutine print_cas_coefs
 end
 
 
-subroutine run_pt2(N_st,energy) 
+subroutine run_pt2(N_st,energy,pt2) 
   implicit none 
   integer :: i,j,k 
   integer, intent(in)          :: N_st 
@@ -128,7 +128,7 @@ subroutine run_pt2(N_st,energy)
   print *,  'E+PT2    = ', energy+pt2 
   print *,  '-----' 
 
-  call ezfio_set_dress_zmq_energy_pt2(energy(1)+pt2(1))
+!  call ezfio_set_dress_zmq_energy_pt2(energy(1)+pt2(1))
 
 end 
 
