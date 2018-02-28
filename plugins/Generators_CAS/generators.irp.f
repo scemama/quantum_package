@@ -29,7 +29,7 @@ END_PROVIDER
   END_DOC
   integer                        :: i, k, l, m
   logical                        :: good
-  integer :: number_of_holes,number_of_particles
+  integer, external :: number_of_holes,number_of_particles
   m=0
   do i=1,N_det
     good = ( number_of_holes(psi_det_sorted(1,1,i)) ==0).and.(number_of_particles(psi_det_sorted(1,1,i))==0 )
