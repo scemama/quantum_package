@@ -247,20 +247,21 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
 
     time = omp_get_wtime()
     
-    
-    if(time - timeLast > 1d0 .or. (.not. loop)) then
+    if((time - timeLast > 2d0) .or. (.not. loop)) then
       timeLast = time
       cur_cp = N_cp
-      if(.not. actually_computed(dress_jobs(1))) cycle pullLoop
-
-      do i=2,N_det_generators
+      
+      do i=1,N_det_generators
         if(.not. actually_computed(dress_jobs(i))) then
-          cur_cp = done_cp_at(i-1)
+          if(i /= 1) then
+            cur_cp = done_cp_at(i-1)
+          else
+            cur_cp = 0
+          end if
           exit
         end if
       end do
       if(cur_cp == 0) cycle pullLoop
-      
       
       double precision :: su, su2, eqt, avg, E0, val
       integer, external :: zmq_abort
@@ -268,7 +269,6 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       su = 0d0
       su2 = 0d0
       
-      if(N_states > 1) stop "dress_stoch : N_states == 1"
       do i=1, int(cps_N(cur_cp))
         call get_comb_val(comb(i), dress_detail, cur_cp, val)
         su += val
@@ -280,11 +280,14 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       if(cp_first_tooth(cur_cp) <= comb_teeth) then
         E0 = E0 + dress_detail(1, first_det_of_teeth(cp_first_tooth(cur_cp))) * (1d0-fractage(cp_first_tooth(cur_cp)))
       end if
+
+
       call wall_time(time)
       if ((dabs(eqt) < relative_error .and. cps_N(cur_cp) >= 30)  .or. total_computed == N_det_generators) then
         ! Termination
-        !print '(G10.3, 2X, F16.7, 2X, G16.3, 2X, F16.4, A20)', Nabove(tooth), avg+E, eqt, time-time0, ''
-!        print *, "GREPME", cur_cp, E+E0+avg, eqt, time-time0, total_computed
+        print ""
+        print "(A10,I5,F15.7,E12.4,F10.2)", "grepme", cur_cp, E+E0+avg, eqt, time-time0
+        print ""
         if (zmq_abort(zmq_to_qp_run_socket) == -1) then
           call sleep(1)
           if (zmq_abort(zmq_to_qp_run_socket) == -1) then
@@ -294,8 +297,9 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       else
         if (cur_cp > old_cur_cp) then
           old_cur_cp = cur_cp
-!          print *, "GREPME", cur_cp, E+E0+avg, eqt, time-time0, total_computed
-          !print '(G10.3, 2X, F16.7, 2X, G16.3, 2X, F16.4, A20)', Nabove(tooth), avg+E, eqt, time-time0, ''
+          print ""
+          print "(A10,I5,F15.7,E12.4,F10.2)", "grepme", cur_cp, E+E0+avg, eqt, time-time0
+          print ""
         endif
       endif
     end if
@@ -355,7 +359,7 @@ end function
 &BEGIN_PROVIDER [ integer, N_cps_max ]
   implicit none
   comb_teeth = 16
-  N_cps_max = 32
+  N_cps_max = 64
   gen_per_cp = (N_det_generators / N_cps_max) + 1
   N_cps_max += 1
 END_PROVIDER
