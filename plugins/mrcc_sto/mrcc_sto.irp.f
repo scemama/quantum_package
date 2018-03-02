@@ -21,7 +21,7 @@ END_PROVIDER
 
 
 
-subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, det_minilist, n_minilist, alpha, iproc)
+subroutine dress_with_alpha_buffer(delta_ij_loc, i_gen, minilist, det_minilist, n_minilist, alpha, iproc)
  use bitmasks
  implicit none
   BEGIN_DOC
@@ -32,7 +32,7 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, det_minilist, n_minil
   !alpha : alpha determinant
   END_DOC
   integer(bit_kind), intent(in)   :: alpha(N_int,2), det_minilist(N_int, 2, n_minilist)
-  integer,intent(in)              :: minilist(n_minilist), n_minilist, iproc
+  integer,intent(in)              :: minilist(n_minilist), n_minilist, iproc, i_gen
   double precision, intent(inout) :: delta_ij_loc(N_states,N_det,2)
 
 
@@ -190,9 +190,9 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, det_minilist, n_minil
       do i_state=1,N_states
         hdress =  dIa(i_state) * hla * psi_ref_coef(i_I,i_state)
         sdress =  dIa(i_state) * sla * psi_ref_coef(i_I,i_state)
-        !$OMP ATOMIC
+        !!!$OMP ATOMIC
         delta_ij_loc(i_state,k_sd,1) += hdress
-        !$OMP ATOMIC
+        !!!$OMP ATOMIC
         delta_ij_loc(i_state,k_sd,2) += sdress
       enddo
     enddo

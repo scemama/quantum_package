@@ -376,7 +376,7 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
             !print *, "IND1", indexes(1,:)
             !print *, "IND2", indexes_end(1,:)
             !stop
-            call alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexes, indexes_end, abuf, siz, iproc)
+            call alpha_callback_mask(delta_ij_loc, i_generator, sp, mask, bannedOrb, banned, indexes, indexes_end, abuf, siz, iproc)
             
             !call dress_with_alpha_buffer(delta_ij_loc, minilist, interesting(0), abuf, n)
           end if
@@ -388,12 +388,12 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
 end subroutine
 
 
-subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexes, indexes_end, rabuf, siz, iproc)
+subroutine alpha_callback_mask(delta_ij_loc, i_gen, sp, mask, bannedOrb, banned, indexes, indexes_end, rabuf, siz, iproc)
   use bitmasks
   implicit none
 
   double precision,intent(inout) :: delta_ij_loc(N_states,N_det,2) 
-  integer, intent(in) :: sp, indexes(0:mo_tot_num, 0:mo_tot_num), siz, iproc
+  integer, intent(in) :: sp, indexes(0:mo_tot_num, 0:mo_tot_num), siz, iproc, i_gen
   integer, intent(in) :: indexes_end(0:mo_tot_num, 0:mo_tot_num), rabuf(*)
   logical, intent(in) :: bannedOrb(mo_tot_num,2), banned(mo_tot_num, mo_tot_num)
   integer(bit_kind), intent(in) :: mask(N_int, 2)
@@ -491,7 +491,7 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
         call apply_particles(mask, s1, i, s2, j, alpha, ok, N_int)
         !if(.not. ok) stop "non existing alpha......"
         !print *, "willcall", st4-1, size(labuf)
-        call dress_with_alpha_buffer(delta_ij_loc, labuf, det_minilist, st4-1, alpha, iproc)
+        call dress_with_alpha_buffer(delta_ij_loc, i_gen, labuf, det_minilist, st4-1, alpha, iproc)
         !call dress_with_alpha_buffer(delta_ij_loc, abuf, siz, alpha, 1)
       end if
     end do

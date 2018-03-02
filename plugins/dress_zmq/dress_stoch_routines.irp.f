@@ -285,9 +285,9 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       call wall_time(time)
       if ((dabs(eqt) < relative_error .and. cps_N(cur_cp) >= 30)  .or. total_computed == N_det_generators) then
         ! Termination
-        print ""
+        print *,""
         print "(A10,I5,F15.7,E12.4,F10.2)", "grepme", cur_cp, E+E0+avg, eqt, time-time0
-        print ""
+        print *,""
         if (zmq_abort(zmq_to_qp_run_socket) == -1) then
           call sleep(1)
           if (zmq_abort(zmq_to_qp_run_socket) == -1) then
@@ -297,9 +297,9 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       else
         if (cur_cp > old_cur_cp) then
           old_cur_cp = cur_cp
-          print ""
+          print *,""
           print "(A10,I5,F15.7,E12.4,F10.2)", "grepme", cur_cp, E+E0+avg, eqt, time-time0
-          print ""
+          print *,""
         endif
       endif
     end if
