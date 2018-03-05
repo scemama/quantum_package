@@ -250,20 +250,21 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
 
     time = omp_get_wtime()
     
-    
-    if(time - timeLast > 1d0 .or. (.not. loop)) then
+    if((time - timeLast > 2d0) .or. (.not. loop)) then
       timeLast = time
       cur_cp = N_cp
-      if(.not. actually_computed(dress_jobs(1))) cycle pullLoop
-
-      do i=2,N_det_generators
+      
+      do i=1,N_det_generators
         if(.not. actually_computed(dress_jobs(i))) then
-          cur_cp = done_cp_at(i-1)
+          if(i /= 1) then
+            cur_cp = done_cp_at(i-1)
+          else
+            cur_cp = 0
+          end if
           exit
         end if
       end do
       if(cur_cp == 0) cycle pullLoop
-      
       
       double precision :: su, su2, eqt, avg, E0, val
       integer, external :: zmq_abort
@@ -282,6 +283,8 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       if(cp_first_tooth(cur_cp) <= comb_teeth) then
         E0 = E0 + dress_detail(istate, first_det_of_teeth(cp_first_tooth(cur_cp))) * (1d0-fractage(cp_first_tooth(cur_cp)))
       end if
+
+
       call wall_time(time)
       if ((dabs(eqt) < relative_error .and. cps_N(cur_cp) >= 5)  .or. total_computed == N_det_generators) then
         ! Termination

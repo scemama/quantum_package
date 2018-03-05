@@ -332,8 +332,11 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
         E0 = E0 + mrcc_detail(1, first_det_of_teeth(cp_first_tooth(cur_cp))) * (1d0-fractage(cp_first_tooth(cur_cp)))
       end if
 
-      print '(I5,F15.7,E12.4,F10.2)', cur_cp, E(mrcc_stoch_istate)+E0+avg, eqt, time-timeInit
-
+      if(cur_cp /= old_cur_cp) then
+        old_cur_cp = cur_cp
+        print '(I5,F15.7,E12.4,F10.2)', cur_cp, E(mrcc_stoch_istate)+E0+avg, eqt, time-timeInit
+      end if
+      
       if ((dabs(eqt) < relative_error .and. cps_N(cur_cp) >= 30)  .or. total_computed == N_det_generators) then
         if (zmq_abort(zmq_to_qp_run_socket) == -1) then
           call sleep(1)

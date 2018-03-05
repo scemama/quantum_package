@@ -364,19 +364,9 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
 
             
             if(siz > size(abuf)) stop "buffer too small in alpha_factory"
-            !abuf = 0
             call splash_pq(mask, sp, minilist, i_generator, interesting(0), bannedOrb, banned, indexes_end, abuf, interesting)
-            !indexes_end(:,:) -= 1
-            !do i=1,siz
-            !  if(abuf(i) < 1 .or. abuf(i) > N_det) stop "foireous abuf"
-            !end do
-            !print *, "IND1", indexes(1,:)
-            !print *, "IND2", indexes_end(1,:)
-            !stop
-            call alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexes, indexes_end, abuf, siz, iproc)
+            call alpha_callback_mask(delta_ij_loc, i_generator, sp, mask, bannedOrb, banned, indexes, indexes_end, abuf, siz, iproc)
             
-            !call dress_with_alpha_buffer(delta_ij_loc, minilist, interesting(0), abuf, n)
-
           end if
         enddo
         if(s1 /= s2) monoBdo = .false.
@@ -386,12 +376,12 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
 end subroutine
 
 
-subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexes, indexes_end, rabuf, siz, iproc)
+subroutine alpha_callback_mask(delta_ij_loc, i_gen, sp, mask, bannedOrb, banned, indexes, indexes_end, rabuf, siz, iproc)
   use bitmasks
   implicit none
 
   double precision,intent(inout) :: delta_ij_loc(N_states,N_det,2) 
-  integer, intent(in) :: sp, indexes(0:mo_tot_num, 0:mo_tot_num), siz, iproc
+  integer, intent(in) :: sp, indexes(0:mo_tot_num, 0:mo_tot_num), siz, iproc, i_gen
   integer, intent(in) :: indexes_end(0:mo_tot_num, 0:mo_tot_num), rabuf(*)
   logical, intent(in) :: bannedOrb(mo_tot_num,2), banned(mo_tot_num, mo_tot_num)
   integer(bit_kind), intent(in) :: mask(N_int, 2)
@@ -487,7 +477,7 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
       !APPLY PART
       if(st4 > 1) then
         call apply_particles(mask, s1, i, s2, j, alpha, ok, N_int)
-        call dress_with_alpha_buffer(N_states, N_det, N_int, delta_ij_loc, labuf, det_minilist, st4-1, alpha, iproc)
+        call dress_with_alpha_buffer(N_states, N_det, N_int, delta_ij_loc, i_gen, labuf, det_minilist, st4-1, alpha, iproc)
       end if
     end do
     
