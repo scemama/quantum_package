@@ -15,10 +15,7 @@ subroutine dress_zmq()
     enddo
     SOFT_TOUCH psi_coef 
   endif
-  call run(N_states,energy)
-  if(do_pt2)then
-    call run_pt2(N_states,energy)
-  endif
+  call run_dressing(N_states,energy)
   deallocate(energy)
 end
 

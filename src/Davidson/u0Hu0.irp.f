@@ -483,8 +483,11 @@ subroutine u_0_H_u_0(e_0,u_0,n,keys_tmp,Nint,N_st,sze)
     call H_S2_u_0_nstates_zmq(v_0,s_0,u_1,N_states_diag,sze)
     deallocate(u_1)
   else
-    allocate (v_0(sze,N_st),s_0(sze,N_st))
-    call H_S2_u_0_nstates_openmp(v_0,s_0,u_0,N_st,sze)
+    allocate (v_0(n,N_st),s_0(n,N_st),u_1(n,N_st))
+    u_1(1:n,:) = u_0(1:n,:)
+    call H_S2_u_0_nstates_openmp(v_0,s_0,u_1,N_st,n)
+    u_0(1:n,:) = u_1(1:n,:)
+    deallocate(u_1)
   endif
   double precision :: norm
   do i=1,N_st

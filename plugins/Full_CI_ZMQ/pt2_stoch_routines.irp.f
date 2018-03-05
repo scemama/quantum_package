@@ -513,7 +513,7 @@ END_PROVIDER
   double precision :: norm_left, stato
   integer, external :: pt2_find  
 
-  pt2_weight(1) = psi_coef_generators(1,pt2_stoch_istate)**2
+  pt2_weight(1)  = psi_coef_generators(1,pt2_stoch_istate)**2
   pt2_cweight(1) = psi_coef_generators(1,pt2_stoch_istate)**2
   
   do i=1,N_det_generators

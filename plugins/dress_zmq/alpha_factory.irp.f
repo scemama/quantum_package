@@ -20,19 +20,16 @@ subroutine alpha_callback(delta_ij_loc, i_generator, subset,iproc)
 end subroutine
 
 
- BEGIN_PROVIDER [ integer, psi_from_sorted, (N_det) ]
-&BEGIN_PROVIDER [ integer, idx_non_ref_from_sorted, (N_det) ]
+BEGIN_PROVIDER [ integer, psi_from_sorted, (N_det) ]
   implicit none
   integer :: i,inpsisor
   
-  idx_non_ref_from_sorted = 0
   psi_from_sorted = 0
 
   do i=1,N_det
     psi_from_sorted(psi_det_sorted_order(i)) = i
     inpsisor = psi_det_sorted_order(i)
     if(inpsisor <= 0) stop "idx_non_ref_from_sorted"
-    idx_non_ref_from_sorted(inpsisor) = idx_non_ref_rev(i)
   end do
 END_PROVIDER
 
@@ -41,7 +38,7 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
   use bitmasks
   implicit none
   BEGIN_DOC
-!            WARNING /!\ : It is assumed that the generators and selectors are psi_det_sorted
+! TODO
   END_DOC
   
   double precision,intent(inout) :: delta_ij_loc(N_states,N_det,2) 
@@ -379,6 +376,7 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
             call alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexes, indexes_end, abuf, siz, iproc)
             
             !call dress_with_alpha_buffer(delta_ij_loc, minilist, interesting(0), abuf, n)
+
           end if
         enddo
         if(s1 /= s2) monoBdo = .false.
@@ -489,10 +487,7 @@ subroutine alpha_callback_mask(delta_ij_loc, sp, mask, bannedOrb, banned, indexe
       !APPLY PART
       if(st4 > 1) then
         call apply_particles(mask, s1, i, s2, j, alpha, ok, N_int)
-        !if(.not. ok) stop "non existing alpha......"
-        !print *, "willcall", st4-1, size(labuf)
-        call dress_with_alpha_buffer(delta_ij_loc, labuf, det_minilist, st4-1, alpha, iproc)
-        !call dress_with_alpha_buffer(delta_ij_loc, abuf, siz, alpha, 1)
+        call dress_with_alpha_buffer(N_states, N_det, N_int, delta_ij_loc, labuf, det_minilist, st4-1, alpha, iproc)
       end if
     end do
     

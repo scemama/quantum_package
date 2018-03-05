@@ -16,7 +16,7 @@ end
 &BEGIN_PROVIDER [ integer, excs_ , (0:2,2,2,N_det,Nproc) ]
 &BEGIN_PROVIDER [ double precision, phases_, (N_det, Nproc) ]
 BEGIN_DOC
- ! temporay arrays for dress_with_alpha_buffer. Avoids realocation.
+ ! temporay arrays for dress_with_alpha_buffer. Avoids reallocation.
 END_DOC
 END_PROVIDER
 

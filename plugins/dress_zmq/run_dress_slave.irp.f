@@ -46,7 +46,7 @@ subroutine run_dress_slave(thread,iproc,energy)
     return
   end if
   do i=1,N_states
-    div(i) = psi_ref_coef(dressed_column_idx(i), i)
+    div(i) = psi_coef(dressed_column_idx(i), i)
   end do
   do
     call get_task_from_taskserver(zmq_to_qp_run_socket,worker_id, task_id, task)
@@ -55,14 +55,6 @@ subroutine run_dress_slave(thread,iproc,energy)
       read (task,*) subset, i_generator
       delta_ij_loc = 0d0
       call alpha_callback(delta_ij_loc, i_generator, subset, iproc)
-
-      !!! SET DRESSING COLUMN?
-      !do i=1,N_det
-      !  do i_state=1,N_states
-      !    delta_ij_loc(i_state,i,1) = delta_ij_loc(i_state,i,1) / div(i_state) 
-      !    delta_ij_loc(i_state,i,2) = delta_ij_loc(i_state,i,2) / div(i_state)
-      !  end do
-      !end do
 
       call task_done_to_taskserver(zmq_to_qp_run_socket,worker_id,task_id)
       call push_dress_results(zmq_socket_push, i_generator, delta_ij_loc, task_id)
