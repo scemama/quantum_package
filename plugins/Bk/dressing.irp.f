@@ -1,4 +1,4 @@
-subroutine dress_with_alpha_buffer(Nstates,Ndet,Nint,delta_ij_loc, minilist, det_minilist, n_minilist, alpha, iproc)
+subroutine dress_with_alpha_buffer(Nstates,Ndet,Nint,delta_ij_loc, i_gen, minilist, det_minilist, n_minilist, alpha, iproc)
  use bitmasks
  implicit none
   BEGIN_DOC
@@ -8,7 +8,7 @@ subroutine dress_with_alpha_buffer(Nstates,Ndet,Nint,delta_ij_loc, minilist, det
   !n_minilist : size of minilist
   !alpha : alpha determinant
   END_DOC
-  integer, intent(in)             :: Nint, Ndet, Nstates, n_minilist, iproc
+  integer, intent(in)             :: Nint, Ndet, Nstates, n_minilist, iproc, i_gen
   integer(bit_kind), intent(in)   :: alpha(Nint,2), det_minilist(Nint, 2, n_minilist)
   integer,intent(in)              :: minilist(n_minilist)
   double precision, intent(inout) :: delta_ij_loc(Nstates,Ndet,2)

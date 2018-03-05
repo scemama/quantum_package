@@ -22,7 +22,7 @@ END_PROVIDER
 
 
 
-subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, det_minilist, n_minilist, alpha, iproc)
+subroutine dress_with_alpha_buffer(delta_ij_loc, i_gen, minilist, det_minilist, n_minilist, alpha, iproc)
  use bitmasks
  implicit none
   BEGIN_DOC
@@ -33,7 +33,7 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, det_minilist, n_minil
   !alpha : alpha determinant
   END_DOC
   integer(bit_kind), intent(in)   :: alpha(N_int,2), det_minilist(N_int, 2, n_minilist)
-  integer,intent(in)              :: minilist(n_minilist), n_minilist, iproc
+  integer,intent(in)              :: minilist(n_minilist), n_minilist, iproc, i_gen
   double precision, intent(inout) :: delta_ij_loc(N_states,N_det,2)
 
 
@@ -62,28 +62,29 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, det_minilist, n_minil
   if (perturbative_triples) then
     PROVIDE one_anhil fock_virt_total fock_core_inactive_total one_creat
   endif
+
   canbediamond = 0
   do l_sd=1,n_minilist
-   call get_excitation(det_minilist(1,1,l_sd),alpha,exc,degree1,phase,N_int)
-   call decode_exc(exc,degree1,h1,p1,h2,p2,s1,s2)
+    call get_excitation(det_minilist(1,1,l_sd),alpha,exc,degree1,phase,N_int)
+    call decode_exc(exc,degree1,h1,p1,h2,p2,s1,s2)
    
-   ok = (mo_class(h1)(1:1) == 'A' .or. mo_class(h1)(1:1) == 'I') .and. &
-        (mo_class(p1)(1:1) == 'A' .or. mo_class(p1)(1:1) == 'V') 
-   if(ok .and. degree1 == 2) then
-           ok = (mo_class(h2)(1:1) == 'A' .or. mo_class(h2)(1:1) == 'I') .and. &
-                (mo_class(p2)(1:1) == 'A' .or. mo_class(p2)(1:1) == 'V') 
-   end if
-   
-   if(ok) then
-     canbediamond += 1
-     excs_(:,:,:,l_sd,iproc) = exc(:,:,:)
-     phases_(l_sd, iproc) = phase
-   else
-     phases_(l_sd, iproc) = 0d0
-   end if
-   !call i_h_j(alpha,det_minilist(1,1,l_sd),N_int,hij_cache_(l_sd,iproc))
-   !call get_s2(alpha,det_minilist(1,1,l_sd),N_int,sij_cache_(l_sd,iproc))
-   call i_h_j_s2(alpha,det_minilist(1,1,l_sd),N_int,hij_cache_(l_sd,iproc), sij_cache_(l_sd,iproc))
+    ok = (mo_class(h1)(1:1) == 'A' .or. mo_class(h1)(1:1) == 'I') .and. &
+         (mo_class(p1)(1:1) == 'A' .or. mo_class(p1)(1:1) == 'V') 
+    if(ok .and. degree1 == 2) then
+            ok = (mo_class(h2)(1:1) == 'A' .or. mo_class(h2)(1:1) == 'I') .and. &
+                 (mo_class(p2)(1:1) == 'A' .or. mo_class(p2)(1:1) == 'V') 
+    end if
+    
+    if(ok) then
+      canbediamond += 1
+      excs_(:,:,:,l_sd,iproc) = exc(:,:,:)
+      phases_(l_sd, iproc) = phase
+    else
+      phases_(l_sd, iproc) = 0d0
+    end if
+    !call i_h_j(alpha,det_minilist(1,1,l_sd),N_int,hij_cache_(l_sd,iproc))
+    !call get_s2(alpha,det_minilist(1,1,l_sd),N_int,sij_cache_(l_sd,iproc))
+    call i_h_j_s2(alpha,det_minilist(1,1,l_sd),N_int,hij_cache_(l_sd,iproc), sij_cache_(l_sd,iproc))
   enddo
   if(canbediamond <= 1) return
 
@@ -190,9 +191,9 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, minilist, det_minilist, n_minil
       do i_state=1,N_states
         hdress =  dIa(i_state) * hla * psi_ref_coef(i_I,i_state)
         sdress =  dIa(i_state) * sla * psi_ref_coef(i_I,i_state)
-        !$OMP ATOMIC
+        !!!$OMP ATOMIC
         delta_ij_loc(i_state,k_sd,1) += hdress
-        !$OMP ATOMIC
+        !!!$OMP ATOMIC
         delta_ij_loc(i_state,k_sd,2) += sdress
       enddo
     enddo
