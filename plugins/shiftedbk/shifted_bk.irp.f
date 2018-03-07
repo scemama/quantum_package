@@ -16,7 +16,7 @@ end
 
 
 
-subroutine dress_with_alpha_buffer(delta_ij_loc, i_gen, minilist, det_minilist, n_minilist, alpha, iproc)
+subroutine dress_with_alpha_buffer(Nstates,Ndet,Nint,delta_ij_loc, i_gen, minilist, det_minilist, n_minilist, alpha, iproc)
  use bitmasks
  implicit none
   BEGIN_DOC
@@ -27,16 +27,16 @@ subroutine dress_with_alpha_buffer(delta_ij_loc, i_gen, minilist, det_minilist, 
   !n_minilist : size of minilist
   !alpha : alpha determinant
   END_DOC
-  integer(bit_kind), intent(in)   :: alpha(N_int,2), det_minilist(N_int, 2, n_minilist)
-  integer,intent(in)              :: minilist(n_minilist), n_minilist, iproc, i_gen
-  double precision, intent(inout) :: delta_ij_loc(N_states,N_det,2)
+  integer, intent(in)             :: Nint, Ndet, Nstates, n_minilist, iproc, i_gen
+  integer(bit_kind), intent(in)   :: alpha(Nint,2), det_minilist(Nint, 2, n_minilist)
+  integer,intent(in)              :: minilist(n_minilist)
+  double precision, intent(inout) :: delta_ij_loc(Nstates,N_det,2)
   double precision :: hii, hij, sij, delta_e
   double precision, external :: diag_H_mat_elem_fock
   integer                        :: i,j,k,l,m, l_sd
   double precision, save :: tot = 0d0
   double precision :: de(N_states), val, tmp
   
-  stop "shiftedbk currently does not work"
 
   if(current_generator_(iproc) /= i_gen) then
     current_generator_(iproc) = i_gen
