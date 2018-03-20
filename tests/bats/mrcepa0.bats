@@ -54,7 +54,7 @@ source $QP_ROOT/tests/bats/common.bats.sh
   ezfio set_file TMP
   energy="$(ezfio get mrcepa0 energy_pt2)"
   rm -rf TMP
-  eq $energy -76.2357032076682 2.e-4
+  eq $energy -76.2359960472962 3.e-4
 }
 
 @test "MRCEPA0 H2O cc-pVDZ" {
