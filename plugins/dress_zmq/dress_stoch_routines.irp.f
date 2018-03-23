@@ -4,7 +4,7 @@ BEGIN_PROVIDER [ integer, fragment_first ]
 END_PROVIDER
 
 
-subroutine ZMQ_dress(E, dress, delta, delta_s2, relative_error)
+subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
   use f77_zmq
   
   implicit none
@@ -15,9 +15,11 @@ subroutine ZMQ_dress(E, dress, delta, delta_s2, relative_error)
   integer, external              :: omp_get_thread_num
   double precision, intent(in)   :: E(N_states), relative_error
   double precision, intent(out)  :: dress(N_states)
-  double precision, intent(out)  :: delta(N_states, N_det)
-  double precision, intent(out)  :: delta_s2(N_states, N_det)
+  double precision, intent(out)  :: delta_out(N_states, N_det)
+  double precision, intent(out)  :: delta_s2_out(N_states, N_det)
   
+  double precision, allocatable  :: delta(:,:)
+  double precision, allocatable  :: delta_s2(:,:)
   
   integer                        :: i, j, k, Ncp
   
@@ -27,6 +29,7 @@ subroutine ZMQ_dress(E, dress, delta, delta_s2, relative_error)
   double precision               :: state_average_weight_save(N_states)
   
   
+  allocate(delta(N_states,N_det), delta_s2(N_det,N_states))
   state_average_weight_save(:) = state_average_weight(:)
   do dress_stoch_istate=1,N_states
     SOFT_TOUCH dress_stoch_istate
@@ -108,6 +111,8 @@ subroutine ZMQ_dress(E, dress, delta, delta_s2, relative_error)
       call dress_slave_inproc(i)
     endif
     !$OMP END PARALLEL
+    delta_out(dress_stoch_istate,1:N_det) = delta(dress_stoch_istate,1:N_det)
+    delta_s2_out(dress_stoch_istate,1:N_det) = delta_s2_out(dress_stoch_istate,1:N_det)
     call end_parallel_job(zmq_to_qp_run_socket, zmq_socket_pull, 'dress')
     
     print *, '========== ================= ================= ================='
@@ -115,6 +120,7 @@ subroutine ZMQ_dress(E, dress, delta, delta_s2, relative_error)
   FREE dress_stoch_istate
   state_average_weight(:) = state_average_weight_save(:)
   TOUCH state_average_weight
+  deallocate(delta,delta_s2)
   
 end subroutine
 

@@ -62,9 +62,9 @@ subroutine run_dress_slave(thread,iproc,energy)
       exit
     end if
   end do
-  call disconnect_from_taskserver(zmq_to_qp_run_socket,zmq_socket_push,worker_id)
-  call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
+  call disconnect_from_taskserver(zmq_to_qp_run_socket,worker_id)
   call end_zmq_push_socket(zmq_socket_push,thread)
+  call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
 end subroutine
 
 
