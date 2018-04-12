@@ -84,9 +84,9 @@ BEGIN_PROVIDER [ double precision, E0_denominator, (N_states) ]
   if (initialize_E0_denominator) then
    E0_denominator(1:N_states) = psi_energy(1:N_states)
  ! call ezfio_get_full_ci_zmq_energy(pt2_E0_denominator(1))
- ! pt2_E0_denominator(1) -= nuclear_repulsion
- ! pt2_E0_denominator(1:N_states) = HF_energy - nuclear_repulsion
- ! pt2_E0_denominator(1:N_states) = barycentric_electronic_energy(1:N_states)
+ ! E0_denominator(1) -= nuclear_repulsion
+ ! E0_denominator(1:N_states) = HF_energy - nuclear_repulsion
+ ! E0_denominator(1:N_states) = barycentric_electronic_energy(1:N_states)
   else
     E0_denominator = -huge(1.d0)
   endif
