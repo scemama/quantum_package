@@ -29,8 +29,9 @@ subroutine run_dress_slave(thread,iproc,energy)
   double precision,allocatable :: dress_detail(:)
   integer :: ind
   
-  double precision,allocatable :: delta_ij_loc(:,:,:) 
-  integer :: h,p,n
+  double precision,allocatable :: delta_ij_loc(:,:,:)
+  double precision :: div(N_states) 
+  integer :: h,p,n,i_state
   logical :: ok
 
   allocate(delta_ij_loc(N_states,N_det,2)) 
@@ -44,22 +45,26 @@ subroutine run_dress_slave(thread,iproc,energy)
     call end_zmq_push_socket(zmq_socket_push,thread)
     return
   end if
+  do i=1,N_states
+    div(i) = psi_coef(dressed_column_idx(i), i)
+  end do
   do
     call get_task_from_taskserver(zmq_to_qp_run_socket,worker_id, task_id, task)
     
     if(task_id /= 0) then
       read (task,*) subset, i_generator
       delta_ij_loc = 0d0
-      call alpha_callback(delta_ij_loc, i_generator, subset)
+      call alpha_callback(delta_ij_loc, i_generator, subset, iproc)
+
       call task_done_to_taskserver(zmq_to_qp_run_socket,worker_id,task_id)
       call push_dress_results(zmq_socket_push, i_generator, delta_ij_loc, task_id)
     else
       exit
     end if
   end do
-  call disconnect_from_taskserver(zmq_to_qp_run_socket,zmq_socket_push,worker_id)
-  call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
+  call disconnect_from_taskserver(zmq_to_qp_run_socket,worker_id)
   call end_zmq_push_socket(zmq_socket_push,thread)
+  call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
 end subroutine
 
 

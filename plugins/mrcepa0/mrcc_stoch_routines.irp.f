@@ -32,7 +32,6 @@ subroutine ZMQ_mrcc(E, mrcc, delta, delta_s2, relative_error)
   
   double precision, external     :: omp_get_wtime
   double precision               :: time
-  double precision               :: w!(N_states)
   integer, external :: add_task_to_taskserver
 
   state_average_weight(:) = 0.d0
@@ -42,11 +41,6 @@ subroutine ZMQ_mrcc(E, mrcc, delta, delta_s2, relative_error)
 
   provide nproc fragment_first fragment_count mo_bielec_integrals_in_map mo_mono_elec_integral mrcc_weight psi_selectors
 
-  w = 0.d0
-  w = 1.d0
-  !call update_psi_average_norm_contrib(w)
-
-  
   
   
   print *, '========== ================= ================= ================='
@@ -114,17 +108,15 @@ subroutine ZMQ_mrcc(E, mrcc, delta, delta_s2, relative_error)
         print *,  irp_here, ': Failed in zmq_set_running'
       endif
 
-  !!$OMP PARALLEL DEFAULT(shared) NUM_THREADS(nproc+1)                &
-  !    !$OMP  PRIVATE(i)
-  !i = omp_get_thread_num()
-  !if (i==0) then
-  !  call mrcc_collector(zmq_socket_pull,E, relative_error, delta, delta_s2, mrcc)
-!
-!  else
-!    call mrcc_slave_inproc(i)
-!  endif
-!  !$OMP END PARALLEL
-  call mrcc_collector(zmq_socket_pull,E, relative_error, delta, delta_s2, mrcc)
+  !$OMP PARALLEL DEFAULT(shared) NUM_THREADS(nproc+1)                &
+      !$OMP  PRIVATE(i)
+  i = omp_get_thread_num()
+  if (i==0) then
+    call mrcc_collector(zmq_socket_pull,E, relative_error, delta, delta_s2, mrcc)
+  else
+    call mrcc_slave_inproc(i)
+  endif
+  !$OMP END PARALLEL
   call end_parallel_job(zmq_to_qp_run_socket, zmq_socket_pull, 'mrcc')
   
   print *, '========== ================= ================= ================='
@@ -169,7 +161,6 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
   integer, allocatable :: task_id(:)
   integer :: Nindex
   integer :: ind
-  !double precision, save :: time0 = -1.d0
   double precision :: time, time0, timeInit, old_tooth
   double precision, external :: omp_get_wtime
   integer :: cur_cp, old_cur_cp
@@ -194,7 +185,6 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
   allocate(delta_loc(N_states, N_det_non_ref, 2, delta_loc_N))
   mrcc_detail = 0d0
   delta_det = 0d0
-  !mrcc_detail = mrcc_detail / 0d0
   cp = 0d0
   total_computed = 0
   character*(512) :: task
@@ -224,8 +214,6 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
   delta_loc_i = 0
   pullLoop : do while (more == 1)
     call pull_mrcc_results(zmq_socket_pull, Nindex, ind, mrcc_mwen(1, delta_loc_slot), delta_loc(1,1,1,delta_loc_slot), task_id, ntask)
-    !rezo += N_det_non_ref*8*2
-    !print *, rezo / 1000000_8, "M"
     if(Nindex /= 1) stop "tried pull multiple Nindex"
     delta_loc_i(delta_loc_slot) = ind
 
@@ -235,7 +223,6 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
     endif
     
     time = omp_get_wtime()
-!time - time0 > 10d0
     if(more /= 1 .or. delta_loc_slot == delta_loc_N) then
       time0 = time
       do i=1,delta_loc_N
@@ -244,7 +231,6 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
         end if
       end do
 
-      !$OMP PARALLEL DO SCHEDULE(DYNAMIC) DEFAULT(shared) private(j, ok, i, lcoef, k, i_state)
       do j=1,N_cp !! optimizable
         ok = .false.
         do i=1,delta_loc_N
@@ -253,22 +239,14 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
           else
             lcoef(i) = cps(delta_loc_i(i), j) / cps_N(j) * mrcc_weight_inv(delta_loc_i(i)) * comb_step
             if(lcoef(i) /= 0d0) then
-              !usf = usf + 1d0
               ok = .true.
             end if
           end if
         end do
         if(.not. ok) cycle
-        !num += 1d0
-        !print *, "USEFUL", usf, num, usf/num
-        !do j=1,N_cp !! optimizable
-        !  if(cps(ind, j) > 0d0) then
-            !if(tooth_of_det(ind) < cp_first_tooth(j)) stop "coef on supposedely deterministic det"
             double precision :: fac
             integer :: toothMwen
             logical :: fracted, toothMwendid(0:10000)
-            !fac = cps(ind, j) / cps_N(j) * mrcc_weight_inv(ind) * comb_step
-            !!$OMP PARALLEL DO COLLAPSE(2) DEFAULT(shared)
             do k=1,N_det_non_ref
             do i_state=1,N_states
               cp(i_state,k,j,1) += delta_loc(i_state,k,1,1) * lcoef(1) + &
@@ -278,7 +256,6 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
             end do
             end do
             
-            !!$OMP PARALLEL DO COLLAPSE(2) DEFAULT(shared)
             do k=1,N_det_non_ref
             do i_state=1,N_states
               cp(i_state,k,j,2) += delta_loc(i_state,k,2,1) * lcoef(1) + &
@@ -288,19 +265,12 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
             end do
             end do
 
-        ! end if
       end do
-      !$OMP END PARALLEL DO
 
-      !toothmwendid = .false.
       do i=1,delta_loc_N
         ind = delta_loc_i(i)
         if(ind == 0) cycle
         toothMwen = tooth_of_det(ind)
-        !if(.not. toothmwendid(toothMwen)) then
-        !  usf += 1d0
-        !  toothmwendid(toothMwen) = .true.
-        !end if
         
         fracted = (toothMwen /= 0)
         if(fracted) fracted = (ind == first_det_of_teeth(toothMwen))
@@ -317,12 +287,9 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
         parts_to_get(ind) -= 1
         if(parts_to_get(ind) == 0) then
           actually_computed(ind) = .true.
-          !print *, "CONTRIB", ind, psi_non_ref_coef(ind,1), mrcc_detail(1, ind)
           total_computed += 1
         end if
       end do
-      !num += 1d0
-      !print *, "USEFUL", usf, num, usf/num
       
       delta_loc_slot = 1
       delta_loc_i = 0
@@ -353,7 +320,6 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
       su = 0d0
       su2 = 0d0
       
-      if(N_states > 1) stop "mrcc_stoch : N_states == 1"
       do i=1, int(cps_N(cur_cp))
         call get_comb_val(comb(i), mrcc_detail, cur_cp, val)
         su += val
@@ -366,8 +332,11 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
         E0 = E0 + mrcc_detail(1, first_det_of_teeth(cp_first_tooth(cur_cp))) * (1d0-fractage(cp_first_tooth(cur_cp)))
       end if
 
-      print "(I5,F15.7,E12.4,F10.2)", cur_cp, E+E0+avg, eqt, time-timeInit
-
+      if(cur_cp /= old_cur_cp) then
+        old_cur_cp = cur_cp
+        print '(I5,F15.7,E12.4,F10.2)', cur_cp, E(mrcc_stoch_istate)+E0+avg, eqt, time-timeInit
+      end if
+      
       if ((dabs(eqt) < relative_error .and. cps_N(cur_cp) >= 30)  .or. total_computed == N_det_generators) then
         if (zmq_abort(zmq_to_qp_run_socket) == -1) then
           call sleep(1)

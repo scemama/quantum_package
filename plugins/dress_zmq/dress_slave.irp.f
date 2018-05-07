@@ -1,7 +1,7 @@
 subroutine dress_slave
   implicit none
   BEGIN_DOC
-! Helper program to compute the dress in distributed mode.
+! Helper subroutine to compute the dress in distributed mode.
   END_DOC
   read_wf = .False.
   distributed_davidson = .False.

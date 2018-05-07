@@ -69,7 +69,6 @@ subroutine run_mrcc_slave(thread,iproc,energy)
     else
       integer :: i_generator, i_i_generator, subset
       read (task,*) subset, ind
-      print *, "SLAVE RECEIVED", ind
 !      if(buf%N == 0) then
 !        ! Only first time 
 !        call create_selection_buffer(1, 2, buf)
@@ -97,7 +96,7 @@ subroutine run_mrcc_slave(thread,iproc,energy)
           n = n - 1
 
           if(n /= 0) then
-            call mrcc_part_dress_1c(delta_ij_loc(1,1,1), delta_ij_loc(1,1,2), &
+            call mrcc_part_dress(delta_ij_loc(1,1,1), delta_ij_loc(1,1,2), &
                   i_generator,n,abuf,N_int,omask,contrib)
           endif
         end do
